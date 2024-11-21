@@ -194,7 +194,17 @@ case method == "PUT" && path == "/data/product":
 	controller.UpdateProduct(w, r)
 case method == "DELETE" && at.URLParam(path, "/data/product/:id"):
 	controller.DeleteProduct(w, r)
-	
+
+	// category
+case method == "GET" && path == "/data/category":
+	controller.GetCategories(w, r)
+case method == "GET" && path == "/data/category/id":
+	controller.GetCategoryByID(w, r)
+case method == "POST" && path == "/data/category":
+	controller.PostCategory(w, r)
+case method == "DELETE" && path == "/data/category":
+	controller.DeleteCategory(w, r)
+
 	// Google Auth
 	default:
 		controller.NotFound(w, r)
