@@ -182,8 +182,24 @@ func URL(w http.ResponseWriter, r *http.Request) {
 		controller.VerifyPasswordHandler(w, r)
 	case method == "POST" && path == "/auth/resend":
 		controller.ResendPasswordHandler(w, r)
+
+		// Product routes
+case method == "GET" && path == "/data/product":
+	controller.GetAllProducts(w, r)
+case method == "GET" && at.URLParam(path, "/data/product/:id"):
+	controller.GetProductByID(w, r)
+case method == "POST" && path == "/data/product":
+	controller.CreateProduct(w, r)
+case method == "PUT" && path == "/data/product":
+	controller.UpdateProduct(w, r)
+case method == "DELETE" && at.URLParam(path, "/data/product/:id"):
+	controller.DeleteProduct(w, r)
+	
 	// Google Auth
 	default:
 		controller.NotFound(w, r)
 	}
+
+	
+
 }
