@@ -58,6 +58,19 @@ func CreateMenu(respw http.ResponseWriter, req *http.Request) {
 }
 
 func GetAllMenus(respw http.ResponseWriter, req *http.Request) {
+	// Middleware: Verifikasi Token Pengguna
+	payload, err := watoken.Decode(config.PublicKeyWhatsAuth, at.GetLoginFromHeader(req))
+	if err != nil {
+		var respn model.Response
+		respn.Status = "Error: Token Tidak Valid"
+		respn.Info = at.GetSecretFromHeader(req)
+		respn.Location = "Decode Token Error"
+		respn.Response = err.Error()
+		at.WriteJSON(respw, http.StatusForbidden, respn)
+		return
+	}
+
+	// Ambil Data Menu dari Database
 	data, err := atdb.GetAllDoc[[]model.Menu](config.Mongoconn, "menu", primitive.M{})
 	if err != nil {
 		var respn model.Response
@@ -67,6 +80,7 @@ func GetAllMenus(respw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	// Cek jika Data Kosong
 	if len(data) == 0 {
 		var respn model.Response
 		respn.Status = "Error: Data menu kosong"
@@ -74,6 +88,7 @@ func GetAllMenus(respw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	// Transformasi Data Menu
 	var menus []map[string]interface{}
 	for _, menu := range data {
 		menus = append(menus, map[string]interface{}{
@@ -86,8 +101,16 @@ func GetAllMenus(respw http.ResponseWriter, req *http.Request) {
 		})
 	}
 
-	at.WriteJSON(respw, http.StatusOK, menus)
+	// Respon Berhasil dengan Data Menu
+	response := map[string]interface{}{
+		"status":  "success",
+		"message": "Data menu berhasil diambil",
+		"user":    payload.Alias, // Nama pengguna dari payload
+		"data":    menus,
+	}
+	at.WriteJSON(respw, http.StatusOK, response)
 }
+
 
 func GetMenuByID(respw http.ResponseWriter, req *http.Request) {
 	menuID := req.URL.Query().Get("id")
