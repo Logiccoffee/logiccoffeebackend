@@ -195,15 +195,18 @@ case method == "PUT" && path == "/data/menu":
 case method == "DELETE" && at.URLParam(path, "/data/menu/:id"):
 	controller.DeleteMenu(w, r)
 
-	// category
+	// Category routes
 case method == "GET" && path == "/data/category":
-	controller.GetCategories(w, r)
-case method == "GET" && path == "/data/category/id":
+	controller.GetAllCategories(w, r)
+case method == "GET" && at.URLParam(path, "/data/category/:id"):
 	controller.GetCategoryByID(w, r)
 case method == "POST" && path == "/data/category":
-	controller.PostCategory(w, r)
-case method == "DELETE" && path == "/data/category":
+	controller.CreateCategory(w, r)
+case method == "PUT" && path == "/data/category":
+	controller.UpdateCategory(w, r)
+case method == "DELETE" && at.URLParam(path, "/data/category/:id"):
 	controller.DeleteCategory(w, r)
+
 
 	// Google Auth
 	default:
