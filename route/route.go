@@ -207,6 +207,17 @@ case method == "PUT" && path == "/data/category":
 case method == "DELETE" && at.URLParam(path, "/data/category/:id"):
 	controller.DeleteCategory(w, r)
 
+// Banner routes
+case method == "GET" && path == "/data/banner":
+	controller.GetAllBanners(w, r)
+case method == "GET" && at.URLParam(path, "/data/banner/:id"):
+	controller.GetBannerByID(w, r)
+case method == "POST" && path == "/data/banner":
+	controller.CreateBanner(w, r)
+case method == "PUT" && path == "/data/banner":
+	controller.UpdateBanner(w, r)
+case method == "DELETE" && at.URLParam(path, "/data/banner/:id"):
+	controller.DeleteBanner(w, r)
 
 	// Google Auth
 	default:
