@@ -197,7 +197,7 @@ case method == "DELETE" && at.URLParam(path, "/data/menu/:id"):
 
 	// Category routes
 case method == "GET" && path == "/data/category":
-	controller.GetAllCategories(w, r)
+	controller.GetCategories(w, r)
 case method == "GET" && at.URLParam(path, "/data/category/:id"):
 	controller.GetCategoryByID(w, r)
 case method == "POST" && path == "/data/category":
