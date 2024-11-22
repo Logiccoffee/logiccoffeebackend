@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/gocroot/config"
-	"github.com/gocroot/model"
 	"github.com/gocroot/helper/at"
+	"github.com/gocroot/model"
 	"go.mongodb.org/mongo-driver/bson"
 )
 
@@ -37,7 +37,6 @@ func CreateCategory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Kirim respon sukses
 	at.WriteJSON(w, http.StatusCreated, map[string]interface{}{
 		"status":  "success",
 		"message": "Kategori berhasil dibuat",
@@ -62,21 +61,33 @@ func GetCategories(w http.ResponseWriter, r *http.Request) {
 
 	// Decode hasil pencarian kategori
 	for cursor.Next(context.Background()) {
-		var category model.Category
-		var categoryData bson.M
-		if err := cursor.Decode(&categoryData); err != nil {
+		var category bson.M
+		if err := cursor.Decode(&category); err != nil {
 			at.WriteJSON(w, http.StatusInternalServerError, map[string]interface{}{
 				"status":  "error",
 				"message": "Gagal mendekode kategori: " + err.Error(),
 			})
 			return
 		}
-		category.ID = int(categoryData["id"].(int32))
-		category.Name = categoryData["name"].(string)
-		categories = append(categories, category)
+
+		// Pastikan tipe data sesuai dengan ekspektasi
+		id, _ := category["id"].(int32) // Gunakan tipe sesuai database
+		name, _ := category["name"].(string)
+
+		categories = append(categories, model.Category{
+			ID:   int(id),
+			Name: name,
+		})
 	}
 
-	// Kirim data kategori sebagai respon
+	if err := cursor.Err(); err != nil {
+		at.WriteJSON(w, http.StatusInternalServerError, map[string]interface{}{
+			"status":  "error",
+			"message": "Kesalahan pada cursor: " + err.Error(),
+		})
+		return
+	}
+
 	at.WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"status":  "success",
 		"data":    categories,
