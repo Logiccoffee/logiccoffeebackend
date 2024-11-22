@@ -3,7 +3,9 @@ import (
 	"os"
 	"github.com/gocroot/helper/atdb"
 )
-var MongoString string = os.Getenv("mongodb+srv://fathyafathazzra:Mongodbatlas12@cluster0.8xvps.mongodb.net/")
+
+var MongoString string = os.Getenv("MONGOSTRING")
+
 var mongoinfo = atdb.DBInfo{
 	DBString: MongoString,
 	DBName:   "logiccoffee",
