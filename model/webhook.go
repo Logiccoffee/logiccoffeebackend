@@ -113,6 +113,7 @@ type Userdomyikado struct {
 	JumlahAntrian        int                `json:"jumlahantrian,omitempty" bson:"jumlahantrian,omitempty"`
 	IsEditor             bool               `json:"iseditor,omitempty" bson:"iseditor,omitempty"`
 	IsManager            bool               `json:"ismanager,omitempty" bson:"ismanager,omitempty"`
+	Role                 string             `bson:"role,omitempty" json:"role,omitempty"`
 }
 
 type Task struct {

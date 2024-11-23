@@ -81,12 +81,15 @@ func URL(w http.ResponseWriter, r *http.Request) {
 	//simpan feedback tiket user
 	case method == "POST" && path == "/data/tiket/rate":
 		controller.PostMasukanTiket(w, r)
+
 		// order
 	case method == "POST" && at.URLParam(path, "/data/order/:namalapak"):
 		controller.HandleOrder(w, r)
+
 	//user data
 	case method == "GET" && path == "/data/user":
 		controller.GetDataUser(w, r)
+
 	//user pendaftaran
 	case method == "POST" && path == "/auth/register/users": //mendapatkan email gmail
 		controller.RegisterGmailAuth(w, r)
@@ -183,47 +186,49 @@ func URL(w http.ResponseWriter, r *http.Request) {
 	case method == "POST" && path == "/auth/resend":
 		controller.ResendPasswordHandler(w, r)
 
+		// Update user role
+	case method == "PUT" && path == "/updateUserRole":
+		controller.UpdateUserRole(w, r)
+
 		// Menu routes
-case method == "GET" && path == "/data/menu":
-	controller.GetAllMenus(w, r)
-case method == "GET" && at.URLParam(path, "/data/menu/:id"):
-	controller.GetMenuByID(w, r)
-case method == "POST" && path == "/data/menu":
-	controller.CreateMenu(w, r)
-case method == "PUT" && path == "/data/menu":
-	controller.UpdateMenu(w, r)
-case method == "DELETE" && at.URLParam(path, "/data/menu/:id"):
-	controller.DeleteMenu(w, r)
+	case method == "GET" && path == "/data/menu":
+		controller.GetAllMenus(w, r)
+	case method == "GET" && at.URLParam(path, "/data/menu/:id"):
+		controller.GetMenuByID(w, r)
+	case method == "POST" && path == "/data/menu":
+		controller.CreateMenu(w, r)
+	case method == "PUT" && path == "/data/menu":
+		controller.UpdateMenu(w, r)
+	case method == "DELETE" && at.URLParam(path, "/data/menu/:id"):
+		controller.DeleteMenu(w, r)
 
-	// Category routes
-case method == "GET" && path == "/data/category":
-	controller.GetAllCategories(w, r)
-case method == "GET" && at.URLParam(path, "/data/category/:id"):
-	controller.GetCategoryByID(w, r)
-case method == "POST" && path == "/data/category":
-	controller.CreateCategory(w, r)
-case method == "PUT" && path == "/data/category":
-	controller.UpdateCategory(w, r)
-case method == "DELETE" && at.URLParam(path, "/data/category/:id"):
-	controller.DeleteCategory(w, r)
+		// Category routes
+	case method == "GET" && path == "/data/category":
+		controller.GetAllCategories(w, r)
+	case method == "GET" && at.URLParam(path, "/data/category/:id"):
+		controller.GetCategoryByID(w, r)
+	case method == "POST" && path == "/data/category":
+		controller.CreateCategory(w, r)
+	case method == "PUT" && path == "/data/category":
+		controller.UpdateCategory(w, r)
+	case method == "DELETE" && at.URLParam(path, "/data/category/:id"):
+		controller.DeleteCategory(w, r)
 
-// Banner routes
-case method == "GET" && path == "/data/banner":
-	controller.GetAllBanners(w, r)
-case method == "GET" && at.URLParam(path, "/data/banner/:id"):
-	controller.GetBannerByID(w, r)
-case method == "POST" && path == "/data/banner":
-	controller.CreateBanner(w, r)
-case method == "PUT" && path == "/data/banner":
-	controller.UpdateBanner(w, r)
-case method == "DELETE" && at.URLParam(path, "/data/banner/:id"):
-	controller.DeleteBanner(w, r)
+	// Banner routes
+	case method == "GET" && path == "/data/banner":
+		controller.GetAllBanners(w, r)
+	case method == "GET" && at.URLParam(path, "/data/banner/:id"):
+		controller.GetBannerByID(w, r)
+	case method == "POST" && path == "/data/banner":
+		controller.CreateBanner(w, r)
+	case method == "PUT" && path == "/data/banner":
+		controller.UpdateBanner(w, r)
+	case method == "DELETE" && at.URLParam(path, "/data/banner/:id"):
+		controller.DeleteBanner(w, r)
 
 	// Google Auth
 	default:
 		controller.NotFound(w, r)
 	}
-
-	
 
 }

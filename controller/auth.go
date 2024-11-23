@@ -64,6 +64,7 @@ func RegisterGmailAuth(w http.ResponseWriter, r *http.Request) {
 		PhoneNumber:          logintoken.Id,
 		Email:                payload.Claims["email"].(string),
 		GoogleProfilePicture: payload.Claims["picture"].(string),
+		Role:                 "user",
 	}
 
 	// Simpan atau perbarui informasi pengguna di database

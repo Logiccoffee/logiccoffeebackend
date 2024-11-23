@@ -66,6 +66,48 @@ func GetDataUser(respw http.ResponseWriter, req *http.Request) {
 	at.WriteJSON(respw, http.StatusOK, docuser)
 }
 
+func UpdateUserRole(w http.ResponseWriter, r *http.Request) {
+    var request struct {
+        Email string `json:"email"`
+        Role  string `json:"role"`
+    }
+    if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+        w.Header().Set("Content-Type", "application/json")
+        w.WriteHeader(http.StatusBadRequest)
+        json.NewEncoder(w).Encode(map[string]string{"message": "Invalid request"})
+        return
+    }
+
+    validRoles := map[string]bool{"user": true, "admin": true, "cashier": true, "dosen": true}
+    if !validRoles[request.Role] {
+        w.Header().Set("Content-Type", "application/json")
+        w.WriteHeader(http.StatusBadRequest)
+        json.NewEncoder(w).Encode(map[string]string{"message": "Invalid role"})
+        return
+    }
+
+    ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+    defer cancel()
+
+    collection := config.Mongoconn.Collection("user")
+    filter := bson.M{"email": request.Email}
+    update := bson.M{"$set": bson.M{"role": request.Role}}
+
+    _, err := collection.UpdateOne(ctx, filter, update)
+    if err != nil {
+        w.Header().Set("Content-Type", "application/json")
+        w.WriteHeader(http.StatusInternalServerError)
+        json.NewEncoder(w).Encode(map[string]string{"message": "Failed to update user role"})
+        return
+    }
+
+    response := map[string]string{"message": "User role updated successfully"}
+    w.Header().Set("Content-Type", "application/json")
+    w.WriteHeader(http.StatusOK)
+    json.NewEncoder(w).Encode(response)
+}
+
+
 // melakukan pengecekan apakah suda link device klo ada generate token 5tahun
 func PutTokenDataUser(respw http.ResponseWriter, req *http.Request) {
 	payload, err := watoken.Decode(config.PublicKeyWhatsAuth, at.GetLoginFromHeader(req))
