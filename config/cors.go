@@ -10,7 +10,7 @@ var Origins = []string{
 	"https://naskah.bukupedia.co.id",
 	"https://bukupedia.co.id",
 	"https://logiccoffee.id.biz.id", // Menambahkan domain frontend Anda
-	"http://127.0.0.1:5500",  //menambahkan localhost
+	// "http://127.0.0.1:5500",  //menambahkan localhost
 }
 
 // Fungsi untuk memeriksa apakah origin diizinkan

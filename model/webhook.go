@@ -133,6 +133,7 @@ type Stp struct {
 	PhoneNumber  string    `bson:"phonenumber,omitempty" json:"phonenumber,omitempty"`
 	PasswordHash string    `bson:"password,omitempty" json:"password,omitempty"`
 	CreatedAt    time.Time `bson:"createdAt,omitempty" json:"createdAt,omitempty"`
+	Role         string    `bson:"role,omitempty" json:"role,omitempty"`
 }
 
 type VerifyRequest struct {

@@ -49,7 +49,7 @@ func GetDataUser(respw http.ResponseWriter, req *http.Request) {
 	if err != nil {
 		var respn model.Response
 		respn.Status = "Error : Token Tidak Valid "
-		respn.Info = at.GetSecretFromHeader(req)
+		respn.Info = config.PublicKeyWhatsAuth
 		respn.Location = "Decode Token Error: " + at.GetLoginFromHeader(req)
 		respn.Response = err.Error()
 		at.WriteJSON(respw, http.StatusForbidden, respn)
@@ -267,8 +267,10 @@ func RedirectUserByRole(respw http.ResponseWriter, req *http.Request) {
     switch docuser.Role {
     case "user", "dosen":
         http.Redirect(respw, req, "/menu", http.StatusSeeOther)
-    case "cashier", "admin":
-        http.Redirect(respw, req, "/dashboard", http.StatusSeeOther)
+    case "admin":
+        http.Redirect(respw, req, "/dashboard-admin", http.StatusSeeOther)
+    case "cashier":
+        http.Redirect(respw, req, "/dashboard-cashier", http.StatusSeeOther)
     default:
         http.Redirect(respw, req, "/login", http.StatusSeeOther)
     }
