@@ -15,6 +15,7 @@ import (
 	"github.com/gocroot/helper/watoken"
 	"github.com/gocroot/model"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"golang.org/x/crypto/bcrypt"
@@ -133,6 +134,61 @@ func RegisterGmailAuth(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(response)
+}
+
+// register manual
+// RegisterUser handles user registration with only essential fields
+func RegisterUser(respw http.ResponseWriter, req *http.Request) {
+    // Decode the incoming request body into the Userdomyikado struct
+    var usr model.Userdomyikado
+    err := json.NewDecoder(req.Body).Decode(&usr)
+    if err != nil {
+        var respn model.Response
+        respn.Status = "Error: Body tidak valid"
+        respn.Response = err.Error()
+        at.WriteJSON(respw, http.StatusBadRequest, respn)
+        return
+    }
+
+    // Validate required fields
+    if usr.Name == "" || usr.PhoneNumber == "" || usr.Email == "" || usr.Password == "" {
+        var respn model.Response
+        respn.Status = "Isian tidak lengkap"
+        respn.Response = "Mohon isi lengkap Nama, WhatsApp, Email, dan Password"
+        at.WriteJSON(respw, http.StatusBadRequest, respn)
+        return
+    }
+
+    // Hash the password
+    hashedPassword, err := bcrypt.GenerateFromPassword([]byte(usr.Password), bcrypt.DefaultCost)
+    if err != nil {
+        var respn model.Response
+        respn.Status = "Error: Gagal meng-hash password"
+        respn.Response = err.Error()
+        at.WriteJSON(respw, http.StatusInternalServerError, respn)
+        return
+    }
+    usr.Password = string(hashedPassword)
+
+    // Set default role to "user"
+    usr.Role = "user"
+
+    // Generate a new ID for the user
+    usr.ID = primitive.NewObjectID()
+
+    // Insert the user into the database
+    _, err = atdb.InsertOneDoc(config.Mongoconn, "user", usr)
+    if err != nil {
+        var respn model.Response
+        respn.Status = "Error: Gagal insert database"
+        respn.Response = err.Error()
+        at.WriteJSON(respw, http.StatusNotModified, respn)
+        return
+    }
+
+    // Return the registered user as a response (excluding the password for security)
+    usr.Password = "" // Clear the password before sending the response
+    at.WriteJSON(respw, http.StatusOK, usr)
 }
 
 func Auth(w http.ResponseWriter, r *http.Request) {
