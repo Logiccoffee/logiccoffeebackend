@@ -6,7 +6,9 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"strings"
 	"time"
+	"unicode"
 
 	"github.com/gocroot/config"
 	"github.com/gocroot/helper/at"
@@ -139,56 +141,89 @@ func RegisterGmailAuth(w http.ResponseWriter, r *http.Request) {
 // register manual
 // RegisterUser handles user registration with only essential fields
 func RegisterUser(respw http.ResponseWriter, req *http.Request) {
-    // Decode the incoming request body into the Userdomyikado struct
-    var usr model.Userdomyikado
-    err := json.NewDecoder(req.Body).Decode(&usr)
-    if err != nil {
-        var respn model.Response
-        respn.Status = "Error: Body tidak valid"
-        respn.Response = err.Error()
-        at.WriteJSON(respw, http.StatusBadRequest, respn)
-        return
-    }
+	// Decode the incoming request body into the Userdomyikado struct
+	var usr model.Userdomyikado
+	err := json.NewDecoder(req.Body).Decode(&usr)
+	if err != nil {
+		var respn model.Response
+		respn.Status = "Error: Body tidak valid"
+		respn.Response = err.Error()
+		at.WriteJSON(respw, http.StatusBadRequest, respn)
+		return
+	}
 
-    // Validate required fields
-    if usr.Name == "" || usr.PhoneNumber == "" || usr.Email == "" || usr.Password == "" {
-        var respn model.Response
-        respn.Status = "Isian tidak lengkap"
-        respn.Response = "Mohon isi lengkap Nama, WhatsApp, Email, dan Password"
-        at.WriteJSON(respw, http.StatusBadRequest, respn)
-        return
-    }
+	// Validate required fields
+	if usr.Name == "" || usr.PhoneNumber == "" || usr.Email == "" || usr.Password == "" {
+		var respn model.Response
+		respn.Status = "Isian tidak lengkap"
+		respn.Response = "Mohon isi lengkap Nama, WhatsApp, Email, dan Password"
+		at.WriteJSON(respw, http.StatusBadRequest, respn)
+		return
+	}
 
-    // Hash the password
-    hashedPassword, err := bcrypt.GenerateFromPassword([]byte(usr.Password), bcrypt.DefaultCost)
-    if err != nil {
-        var respn model.Response
-        respn.Status = "Error: Gagal meng-hash password"
-        respn.Response = err.Error()
-        at.WriteJSON(respw, http.StatusInternalServerError, respn)
-        return
-    }
-    usr.Password = string(hashedPassword)
+	// Normalize phone number (convert +62, 62, or 08 to 62)
+	usr.PhoneNumber = normalizePhoneNumber(usr.PhoneNumber)
 
-    // Set default role to "user"
-    usr.Role = "user"
+	// Hash the password
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(usr.Password), bcrypt.DefaultCost)
+	if err != nil {
+		var respn model.Response
+		respn.Status = "Error: Gagal meng-hash password"
+		respn.Response = err.Error()
+		at.WriteJSON(respw, http.StatusInternalServerError, respn)
+		return
+	}
+	usr.Password = string(hashedPassword)
 
-    // Generate a new ID for the user
-    usr.ID = primitive.NewObjectID()
+	// Set default role to "user"
+	usr.Role = "user"
 
-    // Insert the user into the database
-    _, err = atdb.InsertOneDoc(config.Mongoconn, "user", usr)
-    if err != nil {
-        var respn model.Response
-        respn.Status = "Error: Gagal insert database"
-        respn.Response = err.Error()
-        at.WriteJSON(respw, http.StatusNotModified, respn)
-        return
-    }
+	// Generate a new ID for the user
+	usr.ID = primitive.NewObjectID()
 
-    // Return the registered user as a response (excluding the password for security)
-    usr.Password = "" // Clear the password before sending the response
-    at.WriteJSON(respw, http.StatusOK, usr)
+	// Insert the user into the database
+	_, err = atdb.InsertOneDoc(config.Mongoconn, "user", usr)
+	if err != nil {
+		var respn model.Response
+		respn.Status = "Error: Gagal insert database"
+		respn.Response = err.Error()
+		at.WriteJSON(respw, http.StatusNotModified, respn)
+		return
+	}
+
+	// Return the registered user as a response (excluding the password for security)
+	usr.Password = "" // Clear the password before sending the response
+	at.WriteJSON(respw, http.StatusOK, usr)
+}
+
+// Function to normalize phone number to start with 62
+func normalizePhoneNumber(phone string) string {
+	// Remove all non-numeric characters
+	phone = removeNonNumeric(phone)
+
+	// Remove leading '+' if exists
+	phone = strings.TrimPrefix(phone, "+")
+
+	phone = strings.TrimPrefix(phone, "+")
+	if strings.HasPrefix(phone, "08") {
+		return "62" + phone[2:]
+	} else if phone[0] == '0' {
+		return "62" + phone[1:]
+	}
+	// Jika sudah '62', tidak perlu perubahan
+	return phone
+
+}
+
+// Helper function to remove all non-numeric characters
+func removeNonNumeric(s string) string {
+	var result []rune
+	for _, r := range s {
+		if unicode.IsDigit(r) {
+			result = append(result, r)
+		}
+	}
+	return string(result)
 }
 
 func Auth(w http.ResponseWriter, r *http.Request) {
@@ -285,141 +320,195 @@ func Auth(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
+func LoginUser(w http.ResponseWriter, r *http.Request) {
+	// Decode the incoming request body into a struct
+	var request struct {
+		Email    string `json:"email"`
+		Password string `json:"password"`
+	}
+	err := json.NewDecoder(r.Body).Decode(&request)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"message": "Invalid request"})
+		return
+	}
+
+	// Find user in the database
+	userFilter := bson.M{"email": request.Email}
+	var user model.Userdomyikado
+	user, err = atdb.GetOneDoc[model.Userdomyikado](config.Mongoconn, "user", userFilter)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(map[string]string{"message": "Email atau password salah"})
+		return
+	}
+
+	// Compare the provided password with the stored hashed password
+	err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(request.Password))
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(map[string]string{"message": "Email atau password salah"})
+		return
+	}
+
+	// Generate authentication token
+	token, err := watoken.EncodeforHours(user.PhoneNumber, user.Name, config.PrivateKey, 18)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"message": "Gagal membuat token"})
+		return
+	}
+
+	// Respond with the authentication token
+	response := map[string]interface{}{
+		"message": "Login berhasil",
+		"token":   token,
+		"user":    user,
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(response)
+}
+
 func GeneratePasswordHandler(respw http.ResponseWriter, r *http.Request) {
-    var request struct {
-        PhoneNumber string `json:"phonenumber"`
-        Captcha     string `json:"captcha"`
-    }
-    if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-        var respn model.Response
-        respn.Status = "Invalid Request"
-        respn.Response = err.Error()
-        at.WriteJSON(respw, http.StatusBadRequest, respn)
-        return
-    }
-    // Validate CAPTCHA
-    captchaResponse, err := http.PostForm("https://challenges.cloudflare.com/turnstile/v0/siteverify", url.Values{
-        "secret":   {"0x4AAAAAAAfj2NjfaHRBhkd2VjcfmRe5gvI"},
-        "response": {request.Captcha},
-    })
-    if err != nil {
-        var respn model.Response
-        respn.Status = "Failed to verify captcha"
-        respn.Response = err.Error()
-        at.WriteJSON(respw, http.StatusServiceUnavailable, respn)
-        return
-    }
-    defer captchaResponse.Body.Close()
+	var request struct {
+		PhoneNumber string `json:"phonenumber"`
+		Captcha     string `json:"captcha"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		var respn model.Response
+		respn.Status = "Invalid Request"
+		respn.Response = err.Error()
+		at.WriteJSON(respw, http.StatusBadRequest, respn)
+		return
+	}
+	// Validate CAPTCHA
+	captchaResponse, err := http.PostForm("https://challenges.cloudflare.com/turnstile/v0/siteverify", url.Values{
+		"secret":   {"0x4AAAAAAAfj2NjfaHRBhkd2VjcfmRe5gvI"},
+		"response": {request.Captcha},
+	})
+	if err != nil {
+		var respn model.Response
+		respn.Status = "Failed to verify captcha"
+		respn.Response = err.Error()
+		at.WriteJSON(respw, http.StatusServiceUnavailable, respn)
+		return
+	}
+	defer captchaResponse.Body.Close()
 
-    var captchaResult struct {
-        Success bool `json:"success"`
-    }
-    if err := json.NewDecoder(captchaResponse.Body).Decode(&captchaResult); err != nil {
-        var respn model.Response
-        respn.Status = "Failed to decode captcha response"
-        respn.Response = err.Error()
-        at.WriteJSON(respw, http.StatusInternalServerError, respn)
-        return
-    }
-    if !captchaResult.Success {
-        var respn model.Response
-        respn.Status = "Unauthorized"
-        respn.Response = "Invalid captcha"
-        at.WriteJSON(respw, http.StatusUnauthorized, respn)
-        return
-    }
+	var captchaResult struct {
+		Success bool `json:"success"`
+	}
+	if err := json.NewDecoder(captchaResponse.Body).Decode(&captchaResult); err != nil {
+		var respn model.Response
+		respn.Status = "Failed to decode captcha response"
+		respn.Response = err.Error()
+		at.WriteJSON(respw, http.StatusInternalServerError, respn)
+		return
+	}
+	if !captchaResult.Success {
+		var respn model.Response
+		respn.Status = "Unauthorized"
+		respn.Response = "Invalid captcha"
+		at.WriteJSON(respw, http.StatusUnauthorized, respn)
+		return
+	}
 
-    // Validate phone number
-    re := regexp.MustCompile(`^62\d{9,15}$`)
-    if !re.MatchString(request.PhoneNumber) {
-        var respn model.Response
-        respn.Status = "Bad Request"
-        respn.Response = "Invalid phone number format"
-        at.WriteJSON(respw, http.StatusBadRequest, respn)
-        return
-    }
+	// Validate phone number
+	re := regexp.MustCompile(`^62\d{9,15}$`)
+	if !re.MatchString(request.PhoneNumber) {
+		var respn model.Response
+		respn.Status = "Bad Request"
+		respn.Response = "Invalid phone number format"
+		at.WriteJSON(respw, http.StatusBadRequest, respn)
+		return
+	}
 
-    // Check if phone number exists in the 'user' collection
-    userFilter := bson.M{"phonenumber": request.PhoneNumber}
-    _, err = atdb.GetOneDoc[model.Userdomyikado](config.Mongoconn, "user", userFilter)
-    if err != nil {
-        var respn model.Response
-        respn.Status = "Unauthorized"
-        respn.Response = "Phone number not registered"
-        at.WriteJSON(respw, http.StatusUnauthorized, respn)
-        return
-    }
+	// Check if phone number exists in the 'user' collection
+	userFilter := bson.M{"phonenumber": request.PhoneNumber}
+	_, err = atdb.GetOneDoc[model.Userdomyikado](config.Mongoconn, "user", userFilter)
+	if err != nil {
+		var respn model.Response
+		respn.Status = "Unauthorized"
+		respn.Response = "Phone number not registered"
+		at.WriteJSON(respw, http.StatusUnauthorized, respn)
+		return
+	}
 
-    // Generate random password
-    randomPassword, err := auth.GenerateRandomPassword(12)
-    if err != nil {
-        var respn model.Response
-        respn.Status = "Failed to generate password"
-        respn.Response = err.Error()
-        at.WriteJSON(respw, http.StatusInternalServerError, respn)
-        return
-    }
+	// Generate random password
+	randomPassword, err := auth.GenerateRandomPassword(12)
+	if err != nil {
+		var respn model.Response
+		respn.Status = "Failed to generate password"
+		respn.Response = err.Error()
+		at.WriteJSON(respw, http.StatusInternalServerError, respn)
+		return
+	}
 
-    // Hash the password
-    hashedPassword, err := auth.HashPassword(randomPassword)
-    if err != nil {
-        var respn model.Response
-        respn.Status = "Failed to hash password"
-        respn.Response = err.Error()
-        at.WriteJSON(respw, http.StatusInternalServerError, respn)
-        return
-    }
+	// Hash the password
+	hashedPassword, err := auth.HashPassword(randomPassword)
+	if err != nil {
+		var respn model.Response
+		respn.Status = "Failed to hash password"
+		respn.Response = err.Error()
+		at.WriteJSON(respw, http.StatusInternalServerError, respn)
+		return
+	}
 
-    // Update or insert the user in the database
-    stpFilter := bson.M{"phonenumber": request.PhoneNumber}
-    _, err = atdb.GetOneDoc[model.Stp](config.Mongoconn, "stp", stpFilter)
-    var responseMessage string
+	// Update or insert the user in the database
+	stpFilter := bson.M{"phonenumber": request.PhoneNumber}
+	_, err = atdb.GetOneDoc[model.Stp](config.Mongoconn, "stp", stpFilter)
+	var responseMessage string
 
-    if err == mongo.ErrNoDocuments {
-        // Document not found, insert new one
-        newUser := model.Stp{
-            PhoneNumber:  request.PhoneNumber,
-            PasswordHash: hashedPassword,
-            CreatedAt:    time.Now(),
-            Role:         "user", // Set the role for new user
-        }
-        _, err = atdb.InsertOneDoc(config.Mongoconn, "stp", newUser)
-        if err != nil {
-            var respn model.Response
-            respn.Status = "Failed to insert new user"
-            respn.Response = err.Error()
-            at.WriteJSON(respw, http.StatusNotModified, respn)
-            return
-        }
-        responseMessage = "New user created and password generated successfully"
-    } else {
-        // Document found, update the existing one
-        stpUpdate := bson.M{
-            "phonenumber": request.PhoneNumber,
-            "password":    hashedPassword,
-            "createdAt":   time.Now(),
-            "role":        "user", // Ensure the role is set for existing user
-        }
-        _, err = atdb.UpdateOneDoc(config.Mongoconn, "stp", stpFilter, stpUpdate)
-        if err != nil {
-            var respn model.Response
-            respn.Status = "Failed to update user"
-            respn.Response = err.Error()
-            at.WriteJSON(respw, http.StatusInternalServerError, respn)
-            return
-        }
-        responseMessage = "User info updated and password generated successfully"
-    }
+	if err == mongo.ErrNoDocuments {
+		// Document not found, insert new one
+		newUser := model.Stp{
+			PhoneNumber:  request.PhoneNumber,
+			PasswordHash: hashedPassword,
+			CreatedAt:    time.Now(),
+			Role:         "user", // Set the role for new user
+		}
+		_, err = atdb.InsertOneDoc(config.Mongoconn, "stp", newUser)
+		if err != nil {
+			var respn model.Response
+			respn.Status = "Failed to insert new user"
+			respn.Response = err.Error()
+			at.WriteJSON(respw, http.StatusNotModified, respn)
+			return
+		}
+		responseMessage = "New user created and password generated successfully"
+	} else {
+		// Document found, update the existing one
+		stpUpdate := bson.M{
+			"phonenumber": request.PhoneNumber,
+			"password":    hashedPassword,
+			"createdAt":   time.Now(),
+			"role":        "user", // Ensure the role is set for existing user
+		}
+		_, err = atdb.UpdateOneDoc(config.Mongoconn, "stp", stpFilter, stpUpdate)
+		if err != nil {
+			var respn model.Response
+			respn.Status = "Failed to update user"
+			respn.Response = err.Error()
+			at.WriteJSON(respw, http.StatusInternalServerError, respn)
+			return
+		}
+		responseMessage = "User info updated and password generated successfully"
+	}
 
-    // Respond with success and the generated password
-    response := map[string]interface{}{
-        "message":     responseMessage,
-        "phonenumber": request.PhoneNumber,
-    }
-    at.WriteJSON(respw, http.StatusOK, response)
+	// Respond with success and the generated password
+	response := map[string]interface{}{
+		"message":     responseMessage,
+		"phonenumber": request.PhoneNumber,
+	}
+	at.WriteJSON(respw, http.StatusOK, response)
 
-    // Send the random password via WhatsApp
-    auth.SendWhatsAppPassword(respw, request.PhoneNumber, randomPassword)
+	// Send the random password via WhatsApp
+	auth.SendWhatsAppPassword(respw, request.PhoneNumber, randomPassword)
 }
 
 var (
