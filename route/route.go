@@ -105,7 +105,9 @@ func URL(w http.ResponseWriter, r *http.Request) {
 		// pendaftaran user secara manual
 	case method == "POST" && path == "/auth/register":
 		controller.RegisterUser(w, r)
-
+	case method == "POST" && path == "/auth/login":
+		controller.LoginUser(w, r)	
+		
 	//data proyek
 	case method == "GET" && path == "/data/proyek":
 		controller.GetDataProject(w, r)
@@ -184,7 +186,7 @@ func URL(w http.ResponseWriter, r *http.Request) {
 	// Google Auth
 	case method == "POST" && path == "/auth/users":
 		controller.Auth(w, r)
-	case method == "POST" && path == "/auth/login":
+	case method == "POST" && path == "/auth/signin":
 		controller.GeneratePasswordHandler(w, r)
 	case method == "POST" && path == "/auth/verify":
 		controller.VerifyPasswordHandler(w, r)
