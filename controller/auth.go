@@ -141,83 +141,99 @@ func RegisterGmailAuth(w http.ResponseWriter, r *http.Request) {
 // register manual
 // RegisterUser handles user registration with only essential fields
 func RegisterUser(respw http.ResponseWriter, req *http.Request) {
-	// Decode the incoming request body into the Userdomyikado struct
-	var usr model.Userdomyikado
-	err := json.NewDecoder(req.Body).Decode(&usr)
-	if err != nil {
-		var respn model.Response
-		respn.Status = "Error: Body tidak valid"
-		respn.Response = err.Error()
-		at.WriteJSON(respw, http.StatusBadRequest, respn)
-		return
-	}
+    // Decode the incoming request body into the Userdomyikado struct
+    var usr model.Userdomyikado
+    err := json.NewDecoder(req.Body).Decode(&usr)
+    if err != nil {
+        var respn model.Response
+        respn.Status = "Error: Body tidak valid"
+        respn.Response = err.Error()
+        at.WriteJSON(respw, http.StatusBadRequest, respn)
+        return
+    }
 
-	// Validate required fields
-	if usr.Name == "" || usr.PhoneNumber == "" || usr.Email == "" || usr.Password == "" {
-		var respn model.Response
-		respn.Status = "Isian tidak lengkap"
-		respn.Response = "Mohon isi lengkap Nama, WhatsApp, Email, dan Password"
-		at.WriteJSON(respw, http.StatusBadRequest, respn)
-		return
-	}
+    // Validate required fields
+    if usr.Name == "" || usr.PhoneNumber == "" || usr.Email == "" || usr.Password == "" {
+        var respn model.Response
+        respn.Status = "Isian tidak lengkap"
+        respn.Response = "Mohon isi lengkap Nama, WhatsApp, Email, dan Password"
+        at.WriteJSON(respw, http.StatusBadRequest, respn)
+        return
+    }
 
-	// Normalize phone number (convert +62, 62, or 08 to 62)
-	usr.PhoneNumber = normalizePhoneNumber(usr.PhoneNumber)
+    // Normalize phone number (convert +62, 62, or 08 to 62)
+    usr.PhoneNumber = normalizePhoneNumber(usr.PhoneNumber)
 
-	// **Check for unique email and phone number**
-	collection := config.Mongoconn.Collection("user")
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
+    // **Check for unique email and phone number**
+    collection := config.Mongoconn.Collection("user")
+    ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+    defer cancel()
 
-	// Cek apakah email atau nomor telepon sudah digunakan
-	filter := bson.M{
-		"$or": []bson.M{
-			{"email": usr.Email},
-			{"phonenumber": usr.PhoneNumber},
-		},
-	}
-	var existingUser model.Userdomyikado
-	err = collection.FindOne(ctx, filter).Decode(&existingUser)
-	if err == nil {
-		// Jika ditemukan, berarti email atau nomor telepon sudah digunakan
-		var respn model.Response
-		respn.Status = "Email atau Nomor WhatsApp sudah terdaftar"
-		respn.Response = "Silakan gunakan email atau nomor WhatsApp yang berbeda"
-		at.WriteJSON(respw, http.StatusConflict, respn)
-		return
-	}
+    // Cek apakah email atau nomor telepon sudah digunakan
+    filter := bson.M{
+        "$or": []bson.M{
+            {"email": usr.Email},
+            {"phonenumber": usr.PhoneNumber},
+        },
+    }
+    var existingUser model.Userdomyikado
+    err = collection.FindOne(ctx, filter).Decode(&existingUser)
+    if err == nil {
+        // Jika ditemukan, berarti email atau nomor telepon sudah digunakan
+        var respn model.Response
+        respn.Status = "Email atau Nomor WhatsApp sudah terdaftar"
+        respn.Response = "Silakan gunakan email atau nomor WhatsApp yang berbeda"
+        at.WriteJSON(respw, http.StatusConflict, respn)
+        return
+    }
 
-	// Hash the password
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(usr.Password), bcrypt.DefaultCost)
-	if err != nil {
-		var respn model.Response
-		respn.Status = "Error: Gagal meng-hash password"
-		respn.Response = err.Error()
-		at.WriteJSON(respw, http.StatusInternalServerError, respn)
-		return
-	}
-	usr.Password = string(hashedPassword)
+    // Hash the password
+    hashedPassword, err := bcrypt.GenerateFromPassword([]byte(usr.Password), bcrypt.DefaultCost)
+    if err != nil {
+        var respn model.Response
+        respn.Status = "Error: Gagal meng-hash password"
+        respn.Response = err.Error()
+        at.WriteJSON(respw, http.StatusInternalServerError, respn)
+        return
+    }
+    usr.Password = string(hashedPassword)
 
-	// Set default role to "user"
-	usr.Role = "user"
+    // Set default role to "user"
+    usr.Role = "user"
 
-	// Generate a new ID for the user
-	usr.ID = primitive.NewObjectID()
+    // Generate a new ID for the user
+    usr.ID = primitive.NewObjectID()
 
-	// Insert the user into the database
-	_, err = atdb.InsertOneDoc(config.Mongoconn, "user", usr)
-	if err != nil {
-		var respn model.Response
-		respn.Status = "Error: Gagal insert database"
-		respn.Response = err.Error()
-		at.WriteJSON(respw, http.StatusNotModified, respn)
-		return
-	}
+    // Insert the user into the database
+    _, err = atdb.InsertOneDoc(config.Mongoconn, "user", usr)
+    if err != nil {
+        var respn model.Response
+        respn.Status = "Error: Gagal insert database"
+        respn.Response = err.Error()
+        at.WriteJSON(respw, http.StatusNotModified, respn)
+        return
+    }
 
-	// Return the registered user as a response (excluding the password for security)
-	usr.Password = "" // Clear the password before sending the response
-	at.WriteJSON(respw, http.StatusOK, usr)
+    // Setelah user berhasil registrasi, buat token sementara
+    token, err := watoken.EncodeforHours(usr.PhoneNumber, usr.Name, config.PrivateKey, 1) // Token sementara 1 jam
+    if err != nil {
+        var respn model.Response
+        respn.Status = "Error: Token generation failed"
+        respn.Response = err.Error()
+        at.WriteJSON(respw, http.StatusInternalServerError, respn)
+        return
+    }
+
+    // Clear the password before sending the response
+    usr.Password = "" // Jangan kirim password
+
+    // Kirim token sementara kepada pengguna bersama data user
+    at.WriteJSON(respw, http.StatusOK, map[string]interface{}{
+        "user":  usr,
+        "token": token, // Sertakan token sementara
+    })
 }
+
 
 // Function to normalize phone number to start with 62
 func normalizePhoneNumber(phone string) string {
@@ -348,6 +364,8 @@ func LoginUser(w http.ResponseWriter, r *http.Request) {
 		Email    string `json:"email"`
 		Password string `json:"password"`
 	}
+
+	// Parse the incoming request body
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
@@ -355,21 +373,38 @@ func LoginUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Cari user berdasarkan email
+	// Ensure both email and password are provided
+	if request.Email == "" || request.Password == "" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"message": "Email and password are required"})
+		return
+	}
+
+	// Connect to the MongoDB collection
 	collection := config.Mongoconn.Collection("user")
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
+	// Find the user by email
 	var user model.Userdomyikado
 	err := collection.FindOne(ctx, bson.M{"email": request.Email}).Decode(&user)
 	if err != nil {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusUnauthorized)
-		json.NewEncoder(w).Encode(map[string]string{"message": "Invalid email or user not registered"})
+		// Handle case where user is not found
+		if err == mongo.ErrNoDocuments {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusUnauthorized)
+			json.NewEncoder(w).Encode(map[string]string{"message": "Invalid email or user not registered"})
+		} else {
+			// For other errors (e.g., database issues), respond with 500
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]string{"message": "Database query failed", "error": err.Error()})
+		}
 		return
 	}
 
-	// Validasi password
+	// Validate the password using bcrypt
 	err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(request.Password))
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
@@ -378,16 +413,16 @@ func LoginUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Generate token
+	// Generate the authentication token
 	token, err := watoken.EncodeforHours(user.PhoneNumber, user.Name, config.PrivateKey, 18) // Token valid for 18 hours
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]string{"message": "Token generation failed"})
+		json.NewEncoder(w).Encode(map[string]string{"message": "Token generation failed", "error": err.Error()})
 		return
 	}
 
-	// Return token to user
+	// Return response with user info and token
 	response := map[string]interface{}{
 		"message": "Login successful",
 		"user": map[string]interface{}{
