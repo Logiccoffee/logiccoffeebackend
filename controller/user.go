@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/gocroot/config"
 	"github.com/gocroot/model"
@@ -23,6 +24,7 @@ import (
 	"github.com/gocroot/helper/report"
 	"github.com/gocroot/helper/watoken"
 	"github.com/gocroot/helper/whatsauth"
+	"golang.org/x/crypto/bcrypt"
 )
 
 func GetDataUserFromApi(respw http.ResponseWriter, req *http.Request) {
@@ -151,18 +153,9 @@ func PutTokenDataUser(respw http.ResponseWriter, req *http.Request) {
 }
 
 func PostDataUser(respw http.ResponseWriter, req *http.Request) {
-    payload, err := watoken.Decode(config.PublicKeyWhatsAuth, at.GetLoginFromHeader(req))
-    if err != nil {
-        var respn model.Response
-        respn.Status = "Error : Token Tidak Valid"
-        respn.Info = at.GetSecretFromHeader(req)
-        respn.Location = "Decode Token Error"
-        respn.Response = err.Error()
-        at.WriteJSON(respw, http.StatusForbidden, respn)
-        return
-    }
+    // Decode request body into Userdomyikado struct
     var usr model.Userdomyikado
-    err = json.NewDecoder(req.Body).Decode(&usr)
+    err := json.NewDecoder(req.Body).Decode(&usr)
     if err != nil {
         var respn model.Response
         respn.Status = "Error : Body tidak valid"
@@ -170,85 +163,103 @@ func PostDataUser(respw http.ResponseWriter, req *http.Request) {
         at.WriteJSON(respw, http.StatusBadRequest, respn)
         return
     }
-    //pengecekan isian usr
-    if usr.NIK == "" || usr.Pekerjaan == "" || usr.AlamatRumah == "" || usr.AlamatKantor == "" {
+
+    // Validate the required fields (name, phone number, email, password)
+    if usr.Name == "" || usr.PhoneNumber == "" || usr.Email == "" || usr.Password == "" {
         var respn model.Response
         respn.Status = "Isian tidak lengkap"
-        respn.Response = "Mohon isi lengkap NIK, Pekerjaan, dan kedua alamat"
+        respn.Response = "Mohon isi lengkap Nama, WhatsApp, Email, dan Password"
         at.WriteJSON(respw, http.StatusBadRequest, respn)
         return
     }
-    docuser, err := atdb.GetOneDoc[model.Userdomyikado](config.Mongoconn, "user", primitive.M{"phonenumber": payload.Id})
-    if err != nil {
-        usr.PhoneNumber = payload.Id
-        usr.Name = payload.Alias
-        usr.Role = "user" // Set default role to "user"
-        idusr, err := atdb.InsertOneDoc(config.Mongoconn, "user", usr)
-        if err != nil {
-            var respn model.Response
-            respn.Status = "Gagal Insert Database"
-            respn.Response = err.Error()
-            at.WriteJSON(respw, http.StatusNotModified, respn)
-            return
-        }
-        usr.ID = idusr
-        at.WriteJSON(respw, http.StatusOK, usr)
-        return
+
+    // Normalize phone number (convert +62, 62, or 08 to 62)
+    usr.PhoneNumber = normalizePhoneNumber(usr.PhoneNumber)
+
+    // **Check if the email or phone number is already in use**
+    collection := config.Mongoconn.Collection("user")
+    ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+    defer cancel()
+
+    // Check if email or phone number is already registered
+    filter := bson.M{
+        "$or": []bson.M{
+            {"email": usr.Email},
+            {"phonenumber": usr.PhoneNumber},
+        },
     }
-    //jika email belum gsign maka gsign dulu
-    if docuser.Email == "" {
+    var existingUser model.Userdomyikado
+    err = collection.FindOne(ctx, filter).Decode(&existingUser)
+    if err == nil {
+        // If found, email or phone number is already taken
         var respn model.Response
-        respn.Status = "Email belum terdaftar"
-        respn.Response = "Mohon lakukan google sign in dahulu agar email bisa terdaftar"
-        at.WriteJSON(respw, http.StatusBadRequest, respn)
-        return
-    }
-    docuser.NIK = usr.NIK
-    docuser.Pekerjaan = usr.Pekerjaan
-    docuser.AlamatRumah = usr.AlamatRumah
-    docuser.AlamatKantor = usr.AlamatKantor
-    _, err = atdb.ReplaceOneDoc(config.Mongoconn, "user", primitive.M{"phonenumber": payload.Id}, docuser)
-    if err != nil {
-        var respn model.Response
-        respn.Status = "Gagal replaceonedoc"
-        respn.Response = err.Error()
+        respn.Status = "Email atau Nomor WhatsApp sudah terdaftar"
+        respn.Response = "Silakan gunakan email atau nomor WhatsApp yang berbeda"
         at.WriteJSON(respw, http.StatusConflict, respn)
         return
     }
-    //melakukan update di seluruh member project
-    //ambil project yang member sebagai anggota
-    existingprjs, err := atdb.GetAllDoc[[]model.Project](config.Mongoconn, "project", primitive.M{"members._id": docuser.ID})
-    if err != nil { //kalo belum jadi anggota project manapun aman langsung ok
-        at.WriteJSON(respw, http.StatusOK, docuser)
+
+    // Hash the password
+    hashedPassword, err := bcrypt.GenerateFromPassword([]byte(usr.Password), bcrypt.DefaultCost)
+    if err != nil {
+        var respn model.Response
+        respn.Status = "Error: Gagal meng-hash password"
+        respn.Response = err.Error()
+        at.WriteJSON(respw, http.StatusInternalServerError, respn)
         return
     }
-    if len(existingprjs) == 0 { //kalo belum jadi anggota project manapun aman langsung ok
-        at.WriteJSON(respw, http.StatusOK, docuser)
+    usr.Password = string(hashedPassword)
+
+    // Set default role to "user"
+    usr.Role = "user"
+
+    // Generate a new ID for the user
+    usr.ID = primitive.NewObjectID()
+
+    // Insert the user into the database
+    _, err = atdb.InsertOneDoc(config.Mongoconn, "user", usr)
+    if err != nil {
+        var respn model.Response
+        respn.Status = "Error: Gagal insert database"
+        respn.Response = err.Error()
+        at.WriteJSON(respw, http.StatusNotModified, respn)
         return
     }
-    //loop keanggotaan setiap project dan menggantinya dengan doc yang terupdate
-    for _, prj := range existingprjs {
-        memberToDelete := model.Userdomyikado{PhoneNumber: docuser.PhoneNumber}
-        _, err := atdb.DeleteDocFromArray[model.Userdomyikado](config.Mongoconn, "project", prj.ID, "members", memberToDelete)
-        if err != nil {
-            var respn model.Response
-            respn.Status = "Error : Data project tidak di temukan"
-            respn.Response = err.Error()
-            at.WriteJSON(respw, http.StatusNotFound, respn)
-            return
-        }
-        _, err = atdb.AddDocToArray[model.Userdomyikado](config.Mongoconn, "project", prj.ID, "members", docuser)
-        if err != nil {
-            var respn model.Response
-            respn.Status = "Error : Gagal menambahkan member ke project"
-            respn.Response = err.Error()
-            at.WriteJSON(respw, http.StatusExpectationFailed, respn)
-            return
-        }
 
-    }
+    // Clear the password before sending the response
+    usr.Password = "" // Don't send password back to the user
 
-    at.WriteJSON(respw, http.StatusOK, docuser)
+    // Return the user data
+    at.WriteJSON(respw, http.StatusOK, usr)
+}
+
+func normalizePhoneNumber(phone string) string {
+	// Remove all non-numeric characters
+	phone = removeNonNumeric(phone)
+
+	// Remove leading '+' if exists
+	phone = strings.TrimPrefix(phone, "+")
+
+	phone = strings.TrimPrefix(phone, "+")
+	if strings.HasPrefix(phone, "08") {
+		return "62" + phone[2:]
+	} else if phone[0] == '0' {
+		return "62" + phone[1:]
+	}
+	// Jika sudah '62', tidak perlu perubahan
+	return phone
+
+}
+
+// Helper function to remove all non-numeric characters
+func removeNonNumeric(s string) string {
+	var result []rune
+	for _, r := range s {
+		if unicode.IsDigit(r) {
+			result = append(result, r)
+		}
+	}
+	return string(result)
 }
 
 // Tambahkan rute pengalihan berdasarkan peran pengguna setelah login
