@@ -164,6 +164,29 @@ func RegisterUser(respw http.ResponseWriter, req *http.Request) {
 	// Normalize phone number (convert +62, 62, or 08 to 62)
 	usr.PhoneNumber = normalizePhoneNumber(usr.PhoneNumber)
 
+	// **Check for unique email and phone number**
+	collection := config.Mongoconn.Collection("user")
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// Cek apakah email atau nomor telepon sudah digunakan
+	filter := bson.M{
+		"$or": []bson.M{
+			{"email": usr.Email},
+			{"phonenumber": usr.PhoneNumber},
+		},
+	}
+	var existingUser model.Userdomyikado
+	err = collection.FindOne(ctx, filter).Decode(&existingUser)
+	if err == nil {
+		// Jika ditemukan, berarti email atau nomor telepon sudah digunakan
+		var respn model.Response
+		respn.Status = "Email atau Nomor WhatsApp sudah terdaftar"
+		respn.Response = "Silakan gunakan email atau nomor WhatsApp yang berbeda"
+		at.WriteJSON(respw, http.StatusConflict, respn)
+		return
+	}
+
 	// Hash the password
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(usr.Password), bcrypt.DefaultCost)
 	if err != nil {
@@ -321,58 +344,63 @@ func Auth(w http.ResponseWriter, r *http.Request) {
 }
 
 func LoginUser(w http.ResponseWriter, r *http.Request) {
-	// Decode the incoming request body into a struct
 	var request struct {
 		Email    string `json:"email"`
 		Password string `json:"password"`
 	}
-	err := json.NewDecoder(r.Body).Decode(&request)
-	if err != nil {
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(map[string]string{"message": "Invalid request"})
 		return
 	}
 
-	// Find user in the database
-	userFilter := bson.M{"email": request.Email}
+	// Cari user berdasarkan email
+	collection := config.Mongoconn.Collection("user")
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
 	var user model.Userdomyikado
-	user, err = atdb.GetOneDoc[model.Userdomyikado](config.Mongoconn, "user", userFilter)
+	err := collection.FindOne(ctx, bson.M{"email": request.Email}).Decode(&user)
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusUnauthorized)
-		json.NewEncoder(w).Encode(map[string]string{"message": "Email atau password salah"})
+		json.NewEncoder(w).Encode(map[string]string{"message": "Invalid email or user not registered"})
 		return
 	}
 
-	// Compare the provided password with the stored hashed password
+	// Validasi password
 	err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(request.Password))
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusUnauthorized)
-		json.NewEncoder(w).Encode(map[string]string{"message": "Email atau password salah"})
+		json.NewEncoder(w).Encode(map[string]string{"message": "Invalid password"})
 		return
 	}
 
-	// Generate authentication token
-	token, err := watoken.EncodeforHours(user.PhoneNumber, user.Name, config.PrivateKey, 18)
+	// Generate token
+	token, err := watoken.EncodeforHours(user.PhoneNumber, user.Name, config.PrivateKey, 18) // Token valid for 18 hours
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]string{"message": "Gagal membuat token"})
+		json.NewEncoder(w).Encode(map[string]string{"message": "Token generation failed"})
 		return
 	}
 
-	// Respond with the authentication token
+	// Return token to user
 	response := map[string]interface{}{
-		"message": "Login berhasil",
-		"token":   token,
-		"user":    user,
+		"message": "Login successful",
+		"user": map[string]interface{}{
+			"name":  user.Name,
+			"email": user.Email,
+		},
+		"token": token,
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(response)
 }
+
 
 func GeneratePasswordHandler(respw http.ResponseWriter, r *http.Request) {
 	var request struct {

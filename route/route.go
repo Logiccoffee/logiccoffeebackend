@@ -106,7 +106,7 @@ func URL(w http.ResponseWriter, r *http.Request) {
 	case method == "POST" && path == "/auth/register":
 		controller.RegisterUser(w, r)
 	case method == "POST" && path == "/auth/login":
-		controller.LoginUser(w, r)	
+		controller.LoginUser(w, r)
 		
 	//data proyek
 	case method == "GET" && path == "/data/proyek":
