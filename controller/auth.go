@@ -212,23 +212,12 @@ func RegisterUser(respw http.ResponseWriter, req *http.Request) {
         return
     }
 
-    // Setelah user berhasil registrasi, buat token sementara
-    token, err := watoken.EncodeforHours(usr.PhoneNumber, usr.Name, config.PrivateKey, 1) // Token sementara 1 jam
-    if err != nil {
-        var respn model.Response
-        respn.Status = "Error: Token generation failed"
-        respn.Response = err.Error()
-        at.WriteJSON(respw, http.StatusInternalServerError, respn)
-        return
-    }
-
     // Clear the password before sending the response
     usr.Password = "" // Jangan kirim password
 
     // Kirim token sementara kepada pengguna bersama data user
     at.WriteJSON(respw, http.StatusOK, map[string]interface{}{
         "user":  usr,
-        "token": token, // Sertakan token sementara
     })
 }
 
