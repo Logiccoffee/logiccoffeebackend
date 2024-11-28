@@ -140,6 +140,7 @@ func RegisterGmailAuth(w http.ResponseWriter, r *http.Request) {
 
 // register manual
 // RegisterUser handles user registration with only essential fields
+// RegisterUser handles user registration with only essential fields
 func RegisterUser(respw http.ResponseWriter, req *http.Request) {
     // Decode the incoming request body into the Userdomyikado struct
     var usr model.Userdomyikado
@@ -217,11 +218,10 @@ func RegisterUser(respw http.ResponseWriter, req *http.Request) {
     // Clear the password before sending the response
     usr.Password = "" // Jangan kirim password
 
-    // Kirim token sementara kepada pengguna bersama data user
-    at.WriteJSON(respw, http.StatusOK, map[string]interface{}{
-        "user":  usr,
-    })
+    // Kirim data user langsung tanpa wrapping "user"
+    at.WriteJSON(respw, http.StatusOK, usr)
 }
+
 // Function to normalize phone number to start with 62
 func normalizePhoneNumber(phone string) string {
 	// Remove all non-numeric characters
