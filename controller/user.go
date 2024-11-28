@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"strings"
 	"time"
-	"unicode"
 
 	"github.com/gocroot/config"
 	"github.com/gocroot/model"
@@ -24,7 +23,6 @@ import (
 	"github.com/gocroot/helper/report"
 	"github.com/gocroot/helper/watoken"
 	"github.com/gocroot/helper/whatsauth"
-	"golang.org/x/crypto/bcrypt"
 )
 
 func GetDataUserFromApi(respw http.ResponseWriter, req *http.Request) {
@@ -67,48 +65,6 @@ func GetDataUser(respw http.ResponseWriter, req *http.Request) {
 	docuser.Name = payload.Alias
 	at.WriteJSON(respw, http.StatusOK, docuser)
 }
-
-func UpdateUserRole(w http.ResponseWriter, r *http.Request) {
-    var request struct {
-        Email string `json:"email"`
-        Role  string `json:"role"`
-    }
-    if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-        w.Header().Set("Content-Type", "application/json")
-        w.WriteHeader(http.StatusBadRequest)
-        json.NewEncoder(w).Encode(map[string]string{"message": "Invalid request"})
-        return
-    }
-
-    validRoles := map[string]bool{"user": true, "admin": true, "cashier": true, "dosen": true}
-    if !validRoles[request.Role] {
-        w.Header().Set("Content-Type", "application/json")
-        w.WriteHeader(http.StatusBadRequest)
-        json.NewEncoder(w).Encode(map[string]string{"message": "Invalid role"})
-        return
-    }
-
-    ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-    defer cancel()
-
-    collection := config.Mongoconn.Collection("user")
-    filter := bson.M{"email": request.Email}
-    update := bson.M{"$set": bson.M{"role": request.Role}}
-
-    _, err := collection.UpdateOne(ctx, filter, update)
-    if err != nil {
-        w.Header().Set("Content-Type", "application/json")
-        w.WriteHeader(http.StatusInternalServerError)
-        json.NewEncoder(w).Encode(map[string]string{"message": "Failed to update user role"})
-        return
-    }
-
-    response := map[string]string{"message": "User role updated successfully"}
-    w.Header().Set("Content-Type", "application/json")
-    w.WriteHeader(http.StatusOK)
-    json.NewEncoder(w).Encode(response)
-}
-
 
 // melakukan pengecekan apakah suda link device klo ada generate token 5tahun
 func PutTokenDataUser(respw http.ResponseWriter, req *http.Request) {
@@ -153,138 +109,103 @@ func PutTokenDataUser(respw http.ResponseWriter, req *http.Request) {
 }
 
 func PostDataUser(respw http.ResponseWriter, req *http.Request) {
-    // Decode request body into Userdomyikado struct
-    var usr model.Userdomyikado
-    err := json.NewDecoder(req.Body).Decode(&usr)
-    if err != nil {
-        var respn model.Response
-        respn.Status = "Error : Body tidak valid"
-        respn.Response = err.Error()
-        at.WriteJSON(respw, http.StatusBadRequest, respn)
-        return
-    }
-
-    // Validate the required fields (name, phone number, email, password)
-    if usr.Name == "" || usr.PhoneNumber == "" || usr.Email == "" || usr.Password == "" {
-        var respn model.Response
-        respn.Status = "Isian tidak lengkap"
-        respn.Response = "Mohon isi lengkap Nama, WhatsApp, Email, dan Password"
-        at.WriteJSON(respw, http.StatusBadRequest, respn)
-        return
-    }
-
-    // Normalize phone number (convert +62, 62, or 08 to 62)
-    usr.PhoneNumber = normalizePhoneNumber(usr.PhoneNumber)
-
-    // **Check if the email or phone number is already in use**
-    collection := config.Mongoconn.Collection("user")
-    ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-    defer cancel()
-
-    // Check if email or phone number is already registered
-    filter := bson.M{
-        "$or": []bson.M{
-            {"email": usr.Email},
-            {"phonenumber": usr.PhoneNumber},
-        },
-    }
-    var existingUser model.Userdomyikado
-    err = collection.FindOne(ctx, filter).Decode(&existingUser)
-    if err == nil {
-        // If found, email or phone number is already taken
-        var respn model.Response
-        respn.Status = "Email atau Nomor WhatsApp sudah terdaftar"
-        respn.Response = "Silakan gunakan email atau nomor WhatsApp yang berbeda"
-        at.WriteJSON(respw, http.StatusConflict, respn)
-        return
-    }
-
-    // Hash the password
-    hashedPassword, err := bcrypt.GenerateFromPassword([]byte(usr.Password), bcrypt.DefaultCost)
-    if err != nil {
-        var respn model.Response
-        respn.Status = "Error: Gagal meng-hash password"
-        respn.Response = err.Error()
-        at.WriteJSON(respw, http.StatusInternalServerError, respn)
-        return
-    }
-    usr.Password = string(hashedPassword)
-
-    // Set default role to "user"
-    usr.Role = "user"
-
-    // Generate a new ID for the user
-    usr.ID = primitive.NewObjectID()
-
-    // Insert the user into the database
-    _, err = atdb.InsertOneDoc(config.Mongoconn, "user", usr)
-    if err != nil {
-        var respn model.Response
-        respn.Status = "Error: Gagal insert database"
-        respn.Response = err.Error()
-        at.WriteJSON(respw, http.StatusNotModified, respn)
-        return
-    }
-
-    // Clear the password before sending the response
-    usr.Password = "" // Don't send password back to the user
-
-    // Return the user data
-    at.WriteJSON(respw, http.StatusOK, usr)
-}
-
-func normalizePhoneNumber(phone string) string {
-	// Remove all non-numeric characters
-	phone = removeNonNumeric(phone)
-
-	// Remove leading '+' if exists
-	phone = strings.TrimPrefix(phone, "+")
-
-	phone = strings.TrimPrefix(phone, "+")
-	if strings.HasPrefix(phone, "08") {
-		return "62" + phone[2:]
-	} else if phone[0] == '0' {
-		return "62" + phone[1:]
+	payload, err := watoken.Decode(config.PublicKeyWhatsAuth, at.GetLoginFromHeader(req))
+	if err != nil {
+		var respn model.Response
+		respn.Status = "Error : Token Tidak Valid"
+		respn.Info = at.GetSecretFromHeader(req)
+		respn.Location = "Decode Token Error"
+		respn.Response = err.Error()
+		at.WriteJSON(respw, http.StatusForbidden, respn)
+		return
 	}
-	// Jika sudah '62', tidak perlu perubahan
-	return phone
-
-}
-
-// Helper function to remove all non-numeric characters
-func removeNonNumeric(s string) string {
-	var result []rune
-	for _, r := range s {
-		if unicode.IsDigit(r) {
-			result = append(result, r)
+	var usr model.Userdomyikado
+	err = json.NewDecoder(req.Body).Decode(&usr)
+	if err != nil {
+		var respn model.Response
+		respn.Status = "Error : Body tidak valid"
+		respn.Response = err.Error()
+		at.WriteJSON(respw, http.StatusBadRequest, respn)
+		return
+	}
+	//pengecekan isian usr
+	if usr.NIK == "" || usr.Pekerjaan == "" || usr.AlamatRumah == "" || usr.AlamatKantor == "" {
+		var respn model.Response
+		respn.Status = "Isian tidak lengkap"
+		respn.Response = "Mohon isi lengkap NIK, Pekerjaan, dan kedua alamat"
+		at.WriteJSON(respw, http.StatusBadRequest, respn)
+		return
+	}
+	docuser, err := atdb.GetOneDoc[model.Userdomyikado](config.Mongoconn, "user", primitive.M{"phonenumber": payload.Id})
+	if err != nil {
+		usr.PhoneNumber = payload.Id
+		usr.Name = payload.Alias
+		idusr, err := atdb.InsertOneDoc(config.Mongoconn, "user", usr)
+		if err != nil {
+			var respn model.Response
+			respn.Status = "Gagal Insert Database"
+			respn.Response = err.Error()
+			at.WriteJSON(respw, http.StatusNotModified, respn)
+			return
 		}
+		usr.ID = idusr
+		at.WriteJSON(respw, http.StatusOK, usr)
+		return
 	}
-	return string(result)
-}
+	//jika email belum gsign maka gsign dulu
+	if docuser.Email == "" {
+		var respn model.Response
+		respn.Status = "Email belum terdaftar"
+		respn.Response = "Mohon lakukan google sign in dahulu agar email bisa terdaftar"
+		at.WriteJSON(respw, http.StatusBadRequest, respn)
+		return
+	}
+	docuser.NIK = usr.NIK
+	docuser.Pekerjaan = usr.Pekerjaan
+	docuser.AlamatRumah = usr.AlamatRumah
+	docuser.AlamatKantor = usr.AlamatKantor
+	_, err = atdb.ReplaceOneDoc(config.Mongoconn, "user", primitive.M{"phonenumber": payload.Id}, docuser)
+	if err != nil {
+		var respn model.Response
+		respn.Status = "Gagal replaceonedoc"
+		respn.Response = err.Error()
+		at.WriteJSON(respw, http.StatusConflict, respn)
+		return
+	}
+	//melakukan update di seluruh member project
+	//ambil project yang member sebagai anggota
+	existingprjs, err := atdb.GetAllDoc[[]model.Project](config.Mongoconn, "project", primitive.M{"members._id": docuser.ID})
+	if err != nil { //kalo belum jadi anggota project manapun aman langsung ok
+		at.WriteJSON(respw, http.StatusOK, docuser)
+		return
+	}
+	if len(existingprjs) == 0 { //kalo belum jadi anggota project manapun aman langsung ok
+		at.WriteJSON(respw, http.StatusOK, docuser)
+		return
+	}
+	//loop keanggotaan setiap project dan menggantinya dengan doc yang terupdate
+	for _, prj := range existingprjs {
+		memberToDelete := model.Userdomyikado{PhoneNumber: docuser.PhoneNumber}
+		_, err := atdb.DeleteDocFromArray[model.Userdomyikado](config.Mongoconn, "project", prj.ID, "members", memberToDelete)
+		if err != nil {
+			var respn model.Response
+			respn.Status = "Error : Data project tidak di temukan"
+			respn.Response = err.Error()
+			at.WriteJSON(respw, http.StatusNotFound, respn)
+			return
+		}
+		_, err = atdb.AddDocToArray[model.Userdomyikado](config.Mongoconn, "project", prj.ID, "members", docuser)
+		if err != nil {
+			var respn model.Response
+			respn.Status = "Error : Gagal menambahkan member ke project"
+			respn.Response = err.Error()
+			at.WriteJSON(respw, http.StatusExpectationFailed, respn)
+			return
+		}
 
-// Tambahkan rute pengalihan berdasarkan peran pengguna setelah login
-func RedirectUserByRole(respw http.ResponseWriter, req *http.Request) {
-    payload, err := watoken.Decode(config.PublicKeyWhatsAuth, at.GetLoginFromHeader(req))
-    if err != nil {
-        http.Redirect(respw, req, "/login", http.StatusSeeOther)
-        return
-    }
-    docuser, err := atdb.GetOneDoc[model.Userdomyikado](config.Mongoconn, "user", primitive.M{"phonenumber": payload.Id})
-    if err != nil {
-        http.Redirect(respw, req, "/login", http.StatusSeeOther)
-        return
-    }
-    
-    switch docuser.Role {
-    case "user", "dosen":
-        http.Redirect(respw, req, "/menu", http.StatusSeeOther)
-    case "admin":
-        http.Redirect(respw, req, "/dashboard-admin", http.StatusSeeOther)
-    case "cashier":
-        http.Redirect(respw, req, "/dashboard-cashier", http.StatusSeeOther)
-    default:
-        http.Redirect(respw, req, "/login", http.StatusSeeOther)
-    }
+	}
+
+	at.WriteJSON(respw, http.StatusOK, docuser)
 }
 
 func PostDataBioUser(respw http.ResponseWriter, req *http.Request) {

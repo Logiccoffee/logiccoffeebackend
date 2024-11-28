@@ -7,6 +7,8 @@ import (
 	"net/url"
 	"regexp"
 	"time"
+	"strings"
+	"unicode"
 
 	"github.com/gocroot/config"
 	"github.com/gocroot/helper/at"
@@ -220,7 +222,35 @@ func RegisterUser(respw http.ResponseWriter, req *http.Request) {
         "user":  usr,
     })
 }
+// Function to normalize phone number to start with 62
+func normalizePhoneNumber(phone string) string {
+	// Remove all non-numeric characters
+	phone = removeNonNumeric(phone)
 
+	// Remove leading '+' if exists
+	phone = strings.TrimPrefix(phone, "+")
+
+	phone = strings.TrimPrefix(phone, "+")
+	if strings.HasPrefix(phone, "08") {
+		return "62" + phone[2:]
+	} else if phone[0] == '0' {
+		return "62" + phone[1:]
+	}
+	// Jika sudah '62', tidak perlu perubahan
+	return phone
+
+}
+
+// Helper function to remove all non-numeric characters
+func removeNonNumeric(s string) string {
+	var result []rune
+	for _, r := range s {
+		if unicode.IsDigit(r) {
+			result = append(result, r)
+		}
+	}
+	return string(result)
+}
 
 func Auth(w http.ResponseWriter, r *http.Request) {
 	var request struct {
