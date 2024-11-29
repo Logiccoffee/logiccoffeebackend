@@ -83,9 +83,9 @@ func GetAllCategory(respw http.ResponseWriter, req *http.Request) {
 	var categories []map[string]interface{}
 	for _, category := range data {
 		categories = append(categories, map[string]interface{}{
-			"id":             category.ID,
+			"id":    category.ID,
 			"name":  category.Name,
-			"image":           category.Image,
+			"image": category.Image,
 		})
 	}
 
@@ -172,8 +172,8 @@ func UpdateCategory(respw http.ResponseWriter, req *http.Request) {
 	}
 
 	var requestBody struct {
-		Image        string `json:"image"`
-		Name string `json:"name"`
+		Name  string `json:"name"`
+		Image string `json:"image"`
 	}
 	err = json.NewDecoder(req.Body).Decode(&requestBody)
 	if err != nil {

@@ -211,7 +211,7 @@ func URL(w http.ResponseWriter, r *http.Request) {
 
 		// Category routes
 	case method == "GET" && path == "/data/category":
-		controller.GetAllCategories(w, r)
+		controller.GetAllCategory(w, r)
 	case method == "GET" && at.URLParam(path, "/data/category/:id"):
 		controller.GetCategoryByID(w, r)
 	case method == "POST" && path == "/data/category":
@@ -223,7 +223,7 @@ func URL(w http.ResponseWriter, r *http.Request) {
 
 	// Banner routes
 	case method == "GET" && path == "/data/banner":
-		controller.GetAllBanners(w, r)
+		controller.GetAllBanner(w, r)
 	case method == "GET" && at.URLParam(path, "/data/banner/:id"):
 		controller.GetBannerByID(w, r)
 	case method == "POST" && path == "/data/banner":

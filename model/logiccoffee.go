@@ -23,6 +23,7 @@ type Menu struct {
 	Description string             `json:"description,omitempty" bson:"description,omitempty"`
 	Image       string             `json:"image,omitempty" bson:"image,omitempty"`
 	Price       float64            `json:"price,omitempty" bson:"price,omitempty"`
+    Status      string             `json:"status,omitempty" bson:"status,omitempty"`
 }
 
 // Order struct untuk menyimpan informasi pesanan
