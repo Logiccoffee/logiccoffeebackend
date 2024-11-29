@@ -80,13 +80,12 @@ func GetAllCategory(respw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	// Format hasil sebagai slice of map dengan ID, name_category, dan icon untuk setiap kategori
 	var categories []map[string]interface{}
 	for _, category := range data {
 		categories = append(categories, map[string]interface{}{
 			"id":             category.ID,
-			"name_category":  category.Name,
-			"icon":           category.Image,
+			"name":  category.Name,
+			"image":           category.Image,
 		})
 	}
 
@@ -174,7 +173,7 @@ func UpdateCategory(respw http.ResponseWriter, req *http.Request) {
 
 	var requestBody struct {
 		Image        string `json:"image"`
-		NameCategory string `json:"name_category"`
+		Name string `json:"name"`
 	}
 	err = json.NewDecoder(req.Body).Decode(&requestBody)
 	if err != nil {
@@ -185,8 +184,8 @@ func UpdateCategory(respw http.ResponseWriter, req *http.Request) {
 	}
 
 	updateData := bson.M{}
-	if requestBody.NameCategory != "" {
-		updateData["name"] = requestBody.NameCategory
+	if requestBody.Name != "" {
+		updateData["name"] = requestBody.Name
 	}
 	if requestBody.Image != "" {
 		updateData["image"] = requestBody.Image

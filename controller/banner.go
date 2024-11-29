@@ -55,56 +55,36 @@ func CreateBanner(respw http.ResponseWriter, req *http.Request) {
 	at.WriteJSON(respw, http.StatusOK, response)
 }
 
-func GetAllBanners(respw http.ResponseWriter, req *http.Request) {
-	// Verifikasi Token Pengguna
-	payload, err := watoken.Decode(config.PublicKeyWhatsAuth, at.GetLoginFromHeader(req))
-	if err != nil {
-		var respn model.Response
-		respn.Status = "Error: Token Tidak Valid"
-		respn.Info = at.GetSecretFromHeader(req)
-		respn.Location = "Decode Token Error"
-		respn.Response = err.Error()
-		at.WriteJSON(respw, http.StatusForbidden, respn)
-		return
-	}
-
-	// Ambil Data Banner dari Database
+func GetAllBanner(respw http.ResponseWriter, req *http.Request) {
 	data, err := atdb.GetAllDoc[[]model.Banner](config.Mongoconn, "banner", primitive.M{})
 	if err != nil {
 		var respn model.Response
-		respn.Status = "Error: Data Banner tidak ditemukan"
+		respn.Status = "Error: Banner tidak ditemukan"
 		respn.Response = err.Error()
 		at.WriteJSON(respw, http.StatusNotFound, respn)
 		return
 	}
 
-	// Cek jika Data Kosong
 	if len(data) == 0 {
 		var respn model.Response
-		respn.Status = "Error: Data Banner kosong"
+		respn.Status = "Error: Banner kosong"
 		at.WriteJSON(respw, http.StatusNotFound, respn)
 		return
 	}
 
-	// Transformasi Data Banner
+	// Format hasil sebagai slice of map dengan ID, name, dan image untuk setiap banner
 	var banners []map[string]interface{}
 	for _, banner := range data {
 		banners = append(banners, map[string]interface{}{
 			"id":    banner.ID,
 			"name":  banner.Name,
-			"photo": banner.Photo,
+			"image": banner.Image,
 		})
 	}
 
-	// Response Berhasil dengan Data Banner
-	response := map[string]interface{}{
-		"status":  "success",
-		"message": "Data Banner berhasil diambil",
-		"user":    payload.Alias,
-		"data":    banners,
-	}
-	at.WriteJSON(respw, http.StatusOK, response)
+	at.WriteJSON(respw, http.StatusOK, banners)
 }
+
 
 func GetBannerByID(respw http.ResponseWriter, req *http.Request) {
 	// Ambil ID dari query string
@@ -189,7 +169,7 @@ func UpdateBanner(respw http.ResponseWriter, req *http.Request) {
 	// Dekode Request Body untuk Update
 	var requestBody struct {
 		Name  string `json:"name"`
-		Photo string `json:"photo"`
+		Image string `json:"image"`
 	}
 	err = json.NewDecoder(req.Body).Decode(&requestBody)
 	if err != nil {
@@ -203,7 +183,7 @@ func UpdateBanner(respw http.ResponseWriter, req *http.Request) {
 	updateData := bson.M{
 		"$set": bson.M{
 			"name":  requestBody.Name,
-			"photo": requestBody.Photo,
+			"image": requestBody.Image,
 		},
 	}
 	_, err = atdb.UpdateOneDoc(config.Mongoconn, "banner", filter, updateData)
