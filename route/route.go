@@ -197,18 +197,6 @@ func URL(w http.ResponseWriter, r *http.Request) {
 	case method == "PUT" && path == "/updateUserRole":
 		controller.UpdateUserRole(w, r)
 
-		// Menu routes
-	case method == "GET" && path == "/data/menu":
-		controller.GetAllMenus(w, r)
-	case method == "GET" && at.URLParam(path, "/data/menu/:id"):
-		controller.GetMenuByID(w, r)
-	case method == "POST" && path == "/data/menu":
-		controller.CreateMenu(w, r)
-	case method == "PUT" && path == "/data/menu":
-		controller.UpdateMenu(w, r)
-	case method == "DELETE" && at.URLParam(path, "/data/menu/:id"):
-		controller.DeleteMenu(w, r)
-
 		// Category routes
 	case method == "GET" && path == "/data/category":
 		controller.GetAllCategory(w, r)
