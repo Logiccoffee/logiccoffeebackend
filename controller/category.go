@@ -191,44 +191,30 @@ func UpdateCategory(respw http.ResponseWriter, req *http.Request) {
         return
     }
 
-    // Periksa apakah kategori ada di database
-    filter := bson.M{"_id": objectID}
-    existingCategory, err := atdb.GetOneDoc[model.Category](config.Mongoconn, "category", filter)
-    if err != nil {
-        var respn model.Response
-        respn.Status = "Error: Category tidak ditemukan"
-        respn.Response = err.Error()
-        at.WriteJSON(respw, http.StatusNotFound, respn)
-        return
-    }
-
-    // Preserve unmodifiable fields
-    category.ID = existingCategory.ID
-
-    // Update hanya field yang boleh dimodifikasi
-    updateData := bson.M{}
-    if category.Name != "" && category.Name != existingCategory.Name {
-        updateData["name"] = category.Name
-    }
-    if category.Image != "" && category.Image != existingCategory.Image {
-        updateData["image"] = category.Image
-    }
-
-    // Periksa jika tidak ada perubahan
-    if len(updateData) == 0 {
+    // Periksa apakah body request kosong
+    if category.Name == "" && category.Image == "" {
         var respn model.Response
         respn.Status = "Error: Tidak ada data untuk diperbarui"
         at.WriteJSON(respw, http.StatusBadRequest, respn)
         return
     }
 
-    // Lakukan update ke database
-    update := bson.M{"$set": updateData}
-    _, err = atdb.UpdateOneDoc(config.Mongoconn, "category", filter, update)
+    // Update langsung menggunakan body request
+    update := bson.M{"$set": category}
+    filter := bson.M{"_id": objectID}
+    result, err := atdb.UpdateOneDoc(config.Mongoconn, "category", filter, update)
     if err != nil {
         var respn model.Response
         respn.Status = "Error: Gagal mengupdate category"
         respn.Response = err.Error()
+        at.WriteJSON(respw, http.StatusInternalServerError, respn)
+        return
+    }
+
+    // Jika tidak ada dokumen yang dimodifikasi, beri respons error
+    if result.ModifiedCount == 0 {
+        var respn model.Response
+        respn.Status = "Error: Tidak ada perubahan yang dilakukan"
         at.WriteJSON(respw, http.StatusNotModified, respn)
         return
     }
@@ -237,12 +223,15 @@ func UpdateCategory(respw http.ResponseWriter, req *http.Request) {
     response := map[string]interface{}{
         "status":  "success",
         "message": "Category berhasil diupdate",
-        "data":    category,
-        "name":    payload.Alias,
+        "data": map[string]interface{}{
+            "id":    objectID.Hex(),
+            "name":  category.Name,
+            "image": category.Image,
+        },
+        "updatedBy": payload.Alias,
     }
     at.WriteJSON(respw, http.StatusOK, response)
 }
-
 
 func DeleteCategory(respw http.ResponseWriter, req *http.Request) {
 	// Ambil token dari header
