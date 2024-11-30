@@ -3,6 +3,7 @@ package controller
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 
 	"github.com/gocroot/config"
 	"github.com/gocroot/helper/at"
@@ -108,16 +109,17 @@ func GetAllCategory(respw http.ResponseWriter, req *http.Request) {
 
 
 func GetCategoryByID(respw http.ResponseWriter, req *http.Request) {
-    // Ambil ID kategori dari query params
-    categoryID := req.URL.Query().Get("id")
+    // Ambil ID kategori dari URL menggunakan Split
+    pathParts := strings.Split(req.URL.Path, "/")
+    categoryID := pathParts[len(pathParts)-1] // Ambil bagian terakhir dari URL
     if categoryID == "" {
         var respn model.Response
-        respn.Status = "Error: ID Category tidak ditemukan"
+        respn.Status = "Error: ID Category tidak ditemukan di URL"
         at.WriteJSON(respw, http.StatusBadRequest, respn)
         return
     }
 
-    // Konversi ID ke ObjectID
+    // Konversi ID kategori ke ObjectID MongoDB
     objectID, err := primitive.ObjectIDFromHex(categoryID)
     if err != nil {
         var respn model.Response
@@ -126,7 +128,7 @@ func GetCategoryByID(respw http.ResponseWriter, req *http.Request) {
         return
     }
 
-    // Query ke database untuk mengambil kategori
+    // Query ke database untuk mengambil kategori berdasarkan ObjectID
     filter := bson.M{"_id": objectID}
     category, err := atdb.GetOneDoc[model.Category](config.Mongoconn, "category", filter)
     if err != nil {
@@ -137,7 +139,7 @@ func GetCategoryByID(respw http.ResponseWriter, req *http.Request) {
         return
     }
 
-    // Format response
+    // Format response jika kategori ditemukan
     response := map[string]interface{}{
         "status":  "success",
         "message": "Category ditemukan",
@@ -146,9 +148,8 @@ func GetCategoryByID(respw http.ResponseWriter, req *http.Request) {
     at.WriteJSON(respw, http.StatusOK, response)
 }
 
-
 func UpdateCategory(respw http.ResponseWriter, req *http.Request) {
-    // Decode token untuk validasi
+    // Ambil token dari header untuk validasi
     payload, err := watoken.Decode(config.PublicKeyWhatsAuth, at.GetLoginFromHeader(req))
     if err != nil {
         var respn model.Response
@@ -160,7 +161,26 @@ func UpdateCategory(respw http.ResponseWriter, req *http.Request) {
         return
     }
 
-    // Decode data kategori langsung ke model.Category
+    // Ambil ID kategori dari URL menggunakan Split
+    pathParts := strings.Split(req.URL.Path, "/")
+    categoryID := pathParts[len(pathParts)-1] // Ambil bagian terakhir dari URL
+    if categoryID == "" {
+        var respn model.Response
+        respn.Status = "Error: ID Category tidak ditemukan di URL"
+        at.WriteJSON(respw, http.StatusBadRequest, respn)
+        return
+    }
+
+    // Konversi ID kategori ke ObjectID MongoDB
+    objectID, err := primitive.ObjectIDFromHex(categoryID)
+    if err != nil {
+        var respn model.Response
+        respn.Status = "Error: ID Category tidak valid"
+        at.WriteJSON(respw, http.StatusBadRequest, respn)
+        return
+    }
+
+    // Decode data kategori yang ingin diupdate
     var category model.Category
     err = json.NewDecoder(req.Body).Decode(&category)
     if err != nil {
@@ -171,24 +191,8 @@ func UpdateCategory(respw http.ResponseWriter, req *http.Request) {
         return
     }
 
-    // Validasi format ID kategori
-    if !category.ID.IsZero() { // Pastikan ID sudah valid
-        _, err := primitive.ObjectIDFromHex(category.ID.Hex())
-        if err != nil {
-            var respn model.Response
-            respn.Status = "Error: ID Category tidak valid"
-            at.WriteJSON(respw, http.StatusBadRequest, respn)
-            return
-        }
-    } else {
-        var respn model.Response
-        respn.Status = "Error: ID Category kosong"
-        at.WriteJSON(respw, http.StatusBadRequest, respn)
-        return
-    }
-
     // Periksa apakah kategori ada di database
-    filter := bson.M{"_id": category.ID}
+    filter := bson.M{"_id": objectID}
     existingCategory, err := atdb.GetOneDoc[model.Category](config.Mongoconn, "category", filter)
     if err != nil {
         var respn model.Response
@@ -240,30 +244,30 @@ func UpdateCategory(respw http.ResponseWriter, req *http.Request) {
 }
 
 
-
 func DeleteCategory(respw http.ResponseWriter, req *http.Request) {
 	// Ambil token dari header
 	payload, err := watoken.Decode(config.PublicKeyWhatsAuth, at.GetLoginFromHeader(req))
-    if err != nil {
-        var respn model.Response
-        respn.Status = "Error: Token Tidak Valid"
-        respn.Info = at.GetSecretFromHeader(req)
-        respn.Location = "Decode Token Error"
-        respn.Response = err.Error()
-        at.WriteJSON(respw, http.StatusForbidden, respn)
-        return
-    }
+	if err != nil {
+		var respn model.Response
+		respn.Status = "Error: Token Tidak Valid"
+		respn.Info = at.GetSecretFromHeader(req)
+		respn.Location = "Decode Token Error"
+		respn.Response = err.Error()
+		at.WriteJSON(respw, http.StatusForbidden, respn)
+		return
+	}
 
-	// Ambil ID Category dari query parameter
-	categoryID := req.URL.Query().Get("id")
+	// Ambil ID kategori dari URL
+	pathParts := strings.Split(req.URL.Path, "/")
+	categoryID := pathParts[len(pathParts)-1] // Ambil bagian terakhir dari URL
 	if categoryID == "" {
 		var respn model.Response
-		respn.Status = "Error: ID Category tidak ditemukan"
+		respn.Status = "Error: ID Category tidak ditemukan di URL"
 		at.WriteJSON(respw, http.StatusBadRequest, respn)
 		return
 	}
 
-	// Konversi categoryID dari string ke ObjectID MongoDB
+	// Konversi ID kategori ke ObjectID MongoDB
 	objectID, err := primitive.ObjectIDFromHex(categoryID)
 	if err != nil {
 		var respn model.Response
@@ -290,6 +294,7 @@ func DeleteCategory(respw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	// Berhasil menghapus kategori
 	response := map[string]interface{}{
 		"status":  "success",
 		"message": "Category berhasil dihapus",
