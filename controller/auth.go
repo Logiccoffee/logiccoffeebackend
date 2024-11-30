@@ -8,7 +8,6 @@ import (
 	"regexp"
 	"time"
 	"strings"
-	"unicode"
 
 	"github.com/gocroot/config"
 	"github.com/gocroot/helper/at"
@@ -139,8 +138,6 @@ func RegisterGmailAuth(w http.ResponseWriter, r *http.Request) {
 }
 
 // register manual
-// RegisterUser handles user registration with only essential fields
-// RegisterUser handles user registration with only essential fields
 func RegisterUser(respw http.ResponseWriter, req *http.Request) {
     // Decode the incoming request body into the Userdomyikado struct
     var usr model.Userdomyikado
@@ -162,8 +159,14 @@ func RegisterUser(respw http.ResponseWriter, req *http.Request) {
         return
     }
 
-    // Normalize phone number (convert +62, 62, or 08 to 62)
-    usr.PhoneNumber = normalizePhoneNumber(usr.PhoneNumber)
+     // Validate phone number format
+	 if !isValidPhoneNumber(usr.PhoneNumber) {
+        var respn model.Response
+        respn.Status = "Error: Format nomor WhatsApp tidak valid"
+        respn.Response = "Nomor WhatsApp harus dalam format 62xxxxxxxxxxx"
+        at.WriteJSON(respw, http.StatusBadRequest, respn)
+        return
+    }
 
     // **Check for unique email and phone number**
     collection := config.Mongoconn.Collection("user")
@@ -222,34 +225,9 @@ func RegisterUser(respw http.ResponseWriter, req *http.Request) {
     at.WriteJSON(respw, http.StatusOK, usr)
 }
 
-// Function to normalize phone number to start with 62
-func normalizePhoneNumber(phone string) string {
-	// Remove all non-numeric characters
-	phone = removeNonNumeric(phone)
-
-	// Remove leading '+' if exists
-	phone = strings.TrimPrefix(phone, "+")
-
-	phone = strings.TrimPrefix(phone, "+")
-	if strings.HasPrefix(phone, "08") {
-		return "62" + phone[2:]
-	} else if phone[0] == '0' {
-		return "62" + phone[1:]
-	}
-	// Jika sudah '62', tidak perlu perubahan
-	return phone
-
-}
-
-// Helper function to remove all non-numeric characters
-func removeNonNumeric(s string) string {
-	var result []rune
-	for _, r := range s {
-		if unicode.IsDigit(r) {
-			result = append(result, r)
-		}
-	}
-	return string(result)
+func isValidPhoneNumber(phone string) bool {
+    // Nomor harus dimulai dengan "62" dan memiliki minimal 10 digit
+    return strings.HasPrefix(phone, "62") && len(phone) >= 10
 }
 
 func Auth(w http.ResponseWriter, r *http.Request) {
