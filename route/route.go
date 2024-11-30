@@ -209,6 +209,18 @@ func URL(w http.ResponseWriter, r *http.Request) {
 	case method == "DELETE" && at.URLParam(path, "/data/category/:id"):
 		controller.DeleteCategory(w, r)
 
+		// Menu routes
+	case method == "GET" && path == "/data/menu":
+		controller.GetAllMenu(w, r)
+	case method == "GET" && at.URLParam(path, "/data/menu/:id"):
+		controller.GetMenuByID(w, r)
+	case method == "POST" && path == "/data/menu":
+		controller.CreateMenu(w, r)
+	case method == "PUT" && at.URLParam(path, "/data/menu/:id"):
+		controller.UpdateMenu(w, r)
+	case method == "DELETE" && at.URLParam(path, "/data/menu/:id"):
+		controller.DeleteMenu(w, r)
+
 	// Banner routes
 	case method == "GET" && path == "/data/banner":
 		controller.GetAllBanner(w, r)

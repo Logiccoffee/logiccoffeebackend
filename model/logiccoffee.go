@@ -11,13 +11,13 @@ type Category struct {
 }
 
 type Banner struct {
-	ID    primitive.ObjectID `json:"_id,omitempty" bson:"_id,omitempty"`
+	ID    primitive.ObjectID `json:"id,omitempty" bson:"_id,omitempty"`
 	Name  string             `json:"name,omitempty" bson:"name,omitempty"`
 	Image string             `json:"image,omitempty" bson:"image,omitempty"`
 }
 
 type Menu struct {
-	ID          primitive.ObjectID `json:"_id,omitempty" bson:"_id,omitempty"`
+	ID          primitive.ObjectID `json:"id,omitempty" bson:"_id,omitempty"`
 	CategoryID  primitive.ObjectID `json:"category_id,omitempty" bson:"category_id,omitempty"`
 	Name        string             `json:"name,omitempty" bson:"name,omitempty"`
 	Description string             `json:"description,omitempty" bson:"description,omitempty"`
@@ -28,7 +28,7 @@ type Menu struct {
 
 // Order struct untuk menyimpan informasi pesanan
 type Order struct {
-    ID                primitive.ObjectID `json:"_id,omitempty" bson:"_id,omitempty"`              // ID unik pesanan
+    ID                primitive.ObjectID `json:"id,omitempty" bson:"_id,omitempty"`              // ID unik pesanan
     QueueNumber       int                `json:"queue_number,omitempty" bson:"queue_number,omitempty"`
     UniqueOrderNumber string             `json:"unique_order_number,omitempty" bson:"unique_order_number,omitempty"`
     UserID            primitive.ObjectID `json:"user_id,omitempty" bson:"user_id,omitempty"`      // ID pengguna yang memesan (jika dari web)
