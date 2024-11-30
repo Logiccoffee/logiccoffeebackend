@@ -180,9 +180,9 @@ func UpdateCategory(respw http.ResponseWriter, req *http.Request) {
         return
     }
 
-    // Decode data kategori yang ingin diupdate
-    var category model.Category
-    err = json.NewDecoder(req.Body).Decode(&category)
+    // Decode body langsung ke map
+    var requestBody map[string]interface{}
+    err = json.NewDecoder(req.Body).Decode(&requestBody)
     if err != nil {
         var respn model.Response
         respn.Status = "Error: Gagal membaca data JSON"
@@ -192,26 +192,32 @@ func UpdateCategory(respw http.ResponseWriter, req *http.Request) {
     }
 
     // Periksa apakah body request kosong
-    if category.Name == "" && category.Image == "" {
+    if len(requestBody) == 0 {
         var respn model.Response
         respn.Status = "Error: Tidak ada data untuk diperbarui"
         at.WriteJSON(respw, http.StatusBadRequest, respn)
         return
     }
 
-    // Buat map untuk hanya menyertakan field yang diupdate
+    // Menyiapkan data untuk update (langsung menggantikan field yang diberikan)
     updateData := bson.M{}
-    if category.Name != "" {
-        updateData["name"] = category.Name
+    if name, exists := requestBody["name"]; exists && name != "" {
+        updateData["name"] = name
     }
-    if category.Image != "" {
-        updateData["image"] = category.Image
+    if image, exists := requestBody["image"]; exists && image != "" {
+        updateData["image"] = image
     }
 
-    // Update data menggunakan map yang telah dibuat
-    update := bson.M{"$set": updateData}
-    filter := bson.M{"_id": objectID}
-    result, err := atdb.UpdateOneDoc(config.Mongoconn, "category", filter, update)
+    // Jika tidak ada perubahan data, beri respon error
+    if len(updateData) == 0 {
+        var respn model.Response
+        respn.Status = "Error: Tidak ada perubahan yang dilakukan"
+        at.WriteJSON(respw, http.StatusNotModified, respn)
+        return
+    }
+
+    // Directly replace the document (without using $set)
+    result, err := atdb.UpdateOneDoc(config.Mongoconn, "category", bson.M{"_id": objectID}, updateData)
     if err != nil {
         var respn model.Response
         respn.Status = "Error: Gagal mengupdate category"
@@ -234,8 +240,7 @@ func UpdateCategory(respw http.ResponseWriter, req *http.Request) {
         "message": "Category berhasil diupdate",
         "data": map[string]interface{}{
             "id":    objectID.Hex(),
-            "name":  category.Name,
-            "image": category.Image,
+            "updatedFields": updateData,
         },
         "updatedBy": payload.Alias,
     }
