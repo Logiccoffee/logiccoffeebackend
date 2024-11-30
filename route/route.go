@@ -105,8 +105,8 @@ func URL(w http.ResponseWriter, r *http.Request) {
 		// pendaftaran user secara manual
 	case method == "POST" && path == "/auth/register":
 		controller.RegisterUser(w, r)
-	case method == "POST" && path == "/auth/login":
-		controller.LoginUser(w, r)
+	// case method == "POST" && path == "/auth/login":
+	// 	controller.LoginUser(w, r)
 		
 	//data proyek
 	case method == "GET" && path == "/data/proyek":
@@ -204,7 +204,7 @@ func URL(w http.ResponseWriter, r *http.Request) {
 		controller.GetCategoryByID(w, r)
 	case method == "POST" && path == "/data/category":
 		controller.CreateCategory(w, r)
-	case method == "PUT" && path == "/data/category":
+	case method == "PUT" && at.URLParam(path, "/data/category/:id"):
 		controller.UpdateCategory(w, r)
 	case method == "DELETE" && at.URLParam(path, "/data/category/:id"):
 		controller.DeleteCategory(w, r)

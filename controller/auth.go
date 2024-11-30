@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
-	"time"
 	"strings"
+	"time"
 
 	"github.com/gocroot/config"
 	"github.com/gocroot/helper/at"
@@ -323,84 +323,6 @@ func Auth(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(response)
 }
-
-func LoginUser(w http.ResponseWriter, r *http.Request) {
-	var request struct {
-		Email    string `json:"email"`
-		Password string `json:"password"`
-	}
-
-	// Parse the incoming request body
-	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]string{"message": "Invalid request"})
-		return
-	}
-
-	// Ensure both email and password are provided
-	if request.Email == "" || request.Password == "" {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]string{"message": "Email and password are required"})
-		return
-	}
-
-	// Connect to the MongoDB collection
-	collection := config.Mongoconn.Collection("user")
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	// Find the user by email
-	var user model.Userdomyikado
-	err := collection.FindOne(ctx, bson.M{"email": request.Email}).Decode(&user)
-	if err != nil {
-		// Handle case where user is not found
-		if err == mongo.ErrNoDocuments {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusUnauthorized)
-			json.NewEncoder(w).Encode(map[string]string{"message": "Invalid email or user not registered"})
-		} else {
-			// For other errors (e.g., database issues), respond with 500
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusInternalServerError)
-			json.NewEncoder(w).Encode(map[string]string{"message": "Database query failed", "error": err.Error()})
-		}
-		return
-	}
-
-	// Validate the password using bcrypt
-	err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(request.Password))
-	if err != nil {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusUnauthorized)
-		json.NewEncoder(w).Encode(map[string]string{"message": "Invalid password"})
-		return
-	}
-
-	// Generate the authentication token
-	token, err := watoken.EncodeforHours(user.PhoneNumber, user.Name, config.PrivateKey, 18) // Token valid for 18 hours
-	if err != nil {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]string{"message": "Token generation failed", "error": err.Error()})
-		return
-	}
-
-	// Return response with user info and token
-	response := map[string]interface{}{
-		"message": "Login successful",
-		"user": map[string]interface{}{
-			"name":  user.Name,
-			"email": user.Email,
-		},
-		"token": token,
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(response)
-}
-
 
 func GeneratePasswordHandler(respw http.ResponseWriter, r *http.Request) {
 	var request struct {
