@@ -199,8 +199,17 @@ func UpdateCategory(respw http.ResponseWriter, req *http.Request) {
         return
     }
 
-    // Update langsung menggunakan body request
-    update := bson.M{"$set": category}
+    // Buat map untuk hanya menyertakan field yang diupdate
+    updateData := bson.M{}
+    if category.Name != "" {
+        updateData["name"] = category.Name
+    }
+    if category.Image != "" {
+        updateData["image"] = category.Image
+    }
+
+    // Update data menggunakan map yang telah dibuat
+    update := bson.M{"$set": updateData}
     filter := bson.M{"_id": objectID}
     result, err := atdb.UpdateOneDoc(config.Mongoconn, "category", filter, update)
     if err != nil {
