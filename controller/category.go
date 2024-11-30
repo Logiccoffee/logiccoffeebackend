@@ -14,50 +14,59 @@ import (
 )
 
 func CreateCategory(respw http.ResponseWriter, req *http.Request) {
-	payload, err := watoken.Decode(config.PublicKeyWhatsAuth, at.GetLoginFromHeader(req))
+    // Decode token untuk validasi
+    payload, err := watoken.Decode(config.PublicKeyWhatsAuth, at.GetLoginFromHeader(req))
+    if err != nil {
+        var respn model.Response
+        respn.Status = "Error: Token Tidak Valid"
+        respn.Info = at.GetSecretFromHeader(req)
+        respn.Location = "Decode Token Error"
+        respn.Response = err.Error()
+        at.WriteJSON(respw, http.StatusForbidden, respn)
+        return
+    }
 
-	if err != nil {
-		payload, err = watoken.Decode(config.PublicKeyWhatsAuth, at.GetLoginFromHeader(req))
+    // Decode body untuk mendapatkan data kategori
+    var category model.Category
+    if err := json.NewDecoder(req.Body).Decode(&category); err != nil {
+        var respn model.Response
+        respn.Status = "Error: Bad Request"
+        respn.Response = err.Error()
+        at.WriteJSON(respw, http.StatusBadRequest, respn)
+        return
+    }
 
-		if err != nil {
-			var respn model.Response
-			respn.Status = "Error: Token Tidak Valid"
-			respn.Info = at.GetSecretFromHeader(req)
-			respn.Location = "Decode Token Error"
-			respn.Response = err.Error()
-			at.WriteJSON(respw, http.StatusForbidden, respn)
-			return
-		}
-	}
+    // Siapkan kategori baru tanpa ID
+    newCategory := model.Category{
+        Name:  category.Name,
+        Image: category.Image,
+    }
 
-	var category model.Category
-	if err := json.NewDecoder(req.Body).Decode(&category); err != nil {
-		var respn model.Response
-		respn.Status = "Error: Bad Request"
-		respn.Response = err.Error()
-		at.WriteJSON(respw, http.StatusBadRequest, respn)
-		return
-	}
+    // Masukkan kategori ke dalam database
+    insertResult, err := atdb.InsertOneDoc(config.Mongoconn, "category", newCategory)
+    if err != nil {
+        var respn model.Response
+        respn.Status = "Error: Gagal Insert Database"
+        respn.Response = err.Error()
+        at.WriteJSON(respw, http.StatusNotModified, respn)
+        return
+    }
 
-	newCategory := model.Category{
-		Name: category.Name,
-		Image: category.Image,
-	}
-	_, err = atdb.InsertOneDoc(config.Mongoconn, "category", newCategory)
-	if err != nil {
-		var respn model.Response
-		respn.Status = "Error: Gagal Insert Database"
-		respn.Response = err.Error()
-		at.WriteJSON(respw, http.StatusNotModified, respn)
-		return
-	}
-	response := map[string]interface{}{
-		"status":  "success",
-		"message": "Kategori berhasil ditambahkan",
-		"name":    payload.Alias,
-		"data":    newCategory,
-	}
-	at.WriteJSON(respw, http.StatusOK, response)
+    // Gunakan hasil insertResult langsung (karena bertipe primitive.ObjectID)
+    newCategory.ID = insertResult
+
+    // Siapkan respons
+    response := map[string]interface{}{
+        "status":  "success",
+        "message": "Kategori berhasil ditambahkan",
+        "name":    payload.Alias,
+        "data": map[string]interface{}{
+            "id":    newCategory.ID.Hex(), // Convert ObjectID to string
+            "name":  newCategory.Name,
+            "image": newCategory.Image,
+        },
+    }
+    at.WriteJSON(respw, http.StatusOK, response)
 }
 
 func GetAllCategory(respw http.ResponseWriter, req *http.Request) {
@@ -139,88 +148,97 @@ func GetCategoryByID(respw http.ResponseWriter, req *http.Request) {
 
 
 func UpdateCategory(respw http.ResponseWriter, req *http.Request) {
-	// Decode token untuk validasi
-	payload, err := watoken.Decode(config.PublicKeyWhatsAuth, at.GetLoginFromHeader(req))
-	if err != nil {
-		var respn model.Response
-		respn.Status = "Error: Token Tidak Valid"
-		respn.Info = at.GetSecretFromHeader(req)
-		respn.Location = "Decode Token Error"
-		respn.Response = err.Error()
-		at.WriteJSON(respw, http.StatusForbidden, respn)
-		return
-	}
+    // Decode token untuk validasi
+    payload, err := watoken.Decode(config.PublicKeyWhatsAuth, at.GetLoginFromHeader(req))
+    if err != nil {
+        var respn model.Response
+        respn.Status = "Error: Token Tidak Valid"
+        respn.Info = at.GetSecretFromHeader(req)
+        respn.Location = "Decode Token Error"
+        respn.Response = err.Error()
+        at.WriteJSON(respw, http.StatusForbidden, respn)
+        return
+    }
 
-	// Decode data kategori dari request body
-	var requestBody struct {
-		ID    string `json:"id"`
-		Name  string `json:"name"`
-		Image string `json:"image"`
-	}
-	err = json.NewDecoder(req.Body).Decode(&requestBody)
-	if err != nil {
-		var respn model.Response
-		respn.Status = "Error: Gagal membaca data JSON"
-		at.WriteJSON(respw, http.StatusBadRequest, respn)
-		return
-	}
+    // Decode data kategori langsung ke model.Category
+    var category model.Category
+    err = json.NewDecoder(req.Body).Decode(&category)
+    if err != nil {
+        var respn model.Response
+        respn.Status = "Error: Gagal membaca data JSON"
+        respn.Response = err.Error()
+        at.WriteJSON(respw, http.StatusBadRequest, respn)
+        return
+    }
 
-	// Validasi format ID kategori
-	objectID, err := primitive.ObjectIDFromHex(requestBody.ID)
-	if err != nil {
-		var respn model.Response
-		respn.Status = "Error: ID Category tidak valid"
-		at.WriteJSON(respw, http.StatusBadRequest, respn)
-		return
-	}
+    // Validasi format ID kategori
+    if !category.ID.IsZero() { // Pastikan ID sudah valid
+        _, err := primitive.ObjectIDFromHex(category.ID.Hex())
+        if err != nil {
+            var respn model.Response
+            respn.Status = "Error: ID Category tidak valid"
+            at.WriteJSON(respw, http.StatusBadRequest, respn)
+            return
+        }
+    } else {
+        var respn model.Response
+        respn.Status = "Error: ID Category kosong"
+        at.WriteJSON(respw, http.StatusBadRequest, respn)
+        return
+    }
 
-	// Periksa apakah kategori ada di database
-	filter := bson.M{"_id": objectID}
-	category, err := atdb.GetOneDoc[model.Category](config.Mongoconn, "category", filter)
-	if err != nil {
-		var respn model.Response
-		respn.Status = "Error: Category tidak ditemukan"
-		at.WriteJSON(respw, http.StatusNotFound, respn)
-		return
-	}
+    // Periksa apakah kategori ada di database
+    filter := bson.M{"_id": category.ID}
+    existingCategory, err := atdb.GetOneDoc[model.Category](config.Mongoconn, "category", filter)
+    if err != nil {
+        var respn model.Response
+        respn.Status = "Error: Category tidak ditemukan"
+        respn.Response = err.Error()
+        at.WriteJSON(respw, http.StatusNotFound, respn)
+        return
+    }
 
-	// Siapkan data pembaruan, ID tidak boleh diubah
-	updateData := bson.M{}
-	if requestBody.Name != "" && requestBody.Name != category.Name {
-		updateData["name"] = requestBody.Name
-	}
-	if requestBody.Image != "" && requestBody.Image != category.Image {
-		updateData["image"] = requestBody.Image
-	}
+    // Preserve unmodifiable fields
+    category.ID = existingCategory.ID
 
-	// Tambahkan logika untuk memeriksa jika tidak ada data yang diupdate
-	if len(updateData) == 0 {
-		var respn model.Response
-		respn.Status = "Error: Tidak ada data untuk diperbarui"
-		at.WriteJSON(respw, http.StatusBadRequest, respn)
-		return
-	}
+    // Update hanya field yang boleh dimodifikasi
+    updateData := bson.M{}
+    if category.Name != "" && category.Name != existingCategory.Name {
+        updateData["name"] = category.Name
+    }
+    if category.Image != "" && category.Image != existingCategory.Image {
+        updateData["image"] = category.Image
+    }
 
-	// Lakukan update ke database
-	update := bson.M{"$set": updateData}
-	_, err = atdb.UpdateOneDoc(config.Mongoconn, "category", filter, update)
-	if err != nil {
-		var respn model.Response
-		respn.Status = "Error: Gagal mengupdate category"
-		respn.Response = err.Error()
-		at.WriteJSON(respw, http.StatusNotModified, respn)
-		return
-	}
+    // Periksa jika tidak ada perubahan
+    if len(updateData) == 0 {
+        var respn model.Response
+        respn.Status = "Error: Tidak ada data untuk diperbarui"
+        at.WriteJSON(respw, http.StatusBadRequest, respn)
+        return
+    }
 
-	// Respons sukses
-	response := map[string]interface{}{
-		"status":  "success",
-		"message": "Category berhasil diupdate",
-		"data":    updateData,
-		"name":    payload.Alias,
-	}
-	at.WriteJSON(respw, http.StatusOK, response)
+    // Lakukan update ke database
+    update := bson.M{"$set": updateData}
+    _, err = atdb.UpdateOneDoc(config.Mongoconn, "category", filter, update)
+    if err != nil {
+        var respn model.Response
+        respn.Status = "Error: Gagal mengupdate category"
+        respn.Response = err.Error()
+        at.WriteJSON(respw, http.StatusNotModified, respn)
+        return
+    }
+
+    // Respons sukses
+    response := map[string]interface{}{
+        "status":  "success",
+        "message": "Category berhasil diupdate",
+        "data":    category,
+        "name":    payload.Alias,
+    }
+    at.WriteJSON(respw, http.StatusOK, response)
 }
+
 
 
 func DeleteCategory(respw http.ResponseWriter, req *http.Request) {
