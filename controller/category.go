@@ -17,15 +17,15 @@ import (
 func CreateCategory(respw http.ResponseWriter, req *http.Request) {
     // Decode token untuk validasi
     payload, err := watoken.Decode(config.PublicKeyWhatsAuth, at.GetLoginFromHeader(req))
-    if err != nil {
-        var respn model.Response
-        respn.Status = "Error: Token Tidak Valid"
-        respn.Info = at.GetSecretFromHeader(req)
-        respn.Location = "Decode Token Error"
-        respn.Response = err.Error()
-        at.WriteJSON(respw, http.StatusForbidden, respn)
-        return
-    }
+	if err != nil {
+		var respn model.Response
+		respn.Status = "Error : Token Tidak Valid "
+		respn.Info = config.PublicKeyWhatsAuth
+		respn.Location = "Decode Token Error: " + at.GetLoginFromHeader(req)
+		respn.Response = err.Error()
+		at.WriteJSON(respw, http.StatusForbidden, respn)
+		return
+	}
 
     // Decode body untuk mendapatkan data kategori
     var category model.Category
@@ -151,15 +151,15 @@ func GetCategoryByID(respw http.ResponseWriter, req *http.Request) {
 func UpdateCategory(respw http.ResponseWriter, req *http.Request) {
     // Ambil token dari header untuk validasi
     payload, err := watoken.Decode(config.PublicKeyWhatsAuth, at.GetLoginFromHeader(req))
-    if err != nil {
-        var respn model.Response
-        respn.Status = "Error: Token Tidak Valid"
-        respn.Info = at.GetSecretFromHeader(req)
-        respn.Location = "Decode Token Error"
-        respn.Response = err.Error()
-        at.WriteJSON(respw, http.StatusForbidden, respn)
-        return
-    }
+	if err != nil {
+		var respn model.Response
+		respn.Status = "Error : Token Tidak Valid "
+		respn.Info = config.PublicKeyWhatsAuth
+		respn.Location = "Decode Token Error: " + at.GetLoginFromHeader(req)
+		respn.Response = err.Error()
+		at.WriteJSON(respw, http.StatusForbidden, respn)
+		return
+	}
 
     // Ambil ID kategori dari URL menggunakan Split
     pathParts := strings.Split(req.URL.Path, "/")
@@ -252,9 +252,9 @@ func DeleteCategory(respw http.ResponseWriter, req *http.Request) {
 	payload, err := watoken.Decode(config.PublicKeyWhatsAuth, at.GetLoginFromHeader(req))
 	if err != nil {
 		var respn model.Response
-		respn.Status = "Error: Token Tidak Valid"
-		respn.Info = at.GetSecretFromHeader(req)
-		respn.Location = "Decode Token Error"
+		respn.Status = "Error : Token Tidak Valid "
+		respn.Info = config.PublicKeyWhatsAuth
+		respn.Location = "Decode Token Error: " + at.GetLoginFromHeader(req)
 		respn.Response = err.Error()
 		at.WriteJSON(respw, http.StatusForbidden, respn)
 		return
