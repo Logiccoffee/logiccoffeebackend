@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"time"
+	"strings"
 
 	"github.com/gocroot/config"
 	"github.com/gocroot/helper/at"
@@ -11,7 +12,7 @@ import (
 	"github.com/gocroot/helper/watoken"
 	"github.com/gocroot/model"
 	"go.mongodb.org/mongo-driver/bson"
-	// "go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"golang.org/x/text/language"
 	"golang.org/x/text/message"
 )
@@ -102,6 +103,137 @@ if err != nil {
 			"total":          formatrupiah(newOrder.Total),
 			"payment_method": newOrder.PaymentMethod,
 			"status":         newOrder.Status,
+		},
+	}
+
+	// Kirim response ke client
+	at.WriteJSON(respw, http.StatusOK, response)
+}
+
+// GetAllOrder - Ambil Semua Data Order
+func GetAllOrder(respw http.ResponseWriter, req *http.Request) {
+	// Dekode token WhatsAuth untuk validasi
+	_, err := watoken.Decode(config.PublicKeyWhatsAuth, at.GetLoginFromHeader(req))
+	if err != nil {
+		at.WriteJSON(respw, http.StatusForbidden, model.Response{
+			Status:   "Error: Token Tidak Valid",
+			Location: "Decode Token Error",
+			Response: err.Error(),
+		})
+		return
+	}
+
+	// Ambil semua data order
+	data, err := atdb.GetAllDoc[[]model.Order](config.Mongoconn, "orders", bson.M{})
+	if err != nil {
+		at.WriteJSON(respw, http.StatusNotFound, model.Response{
+			Status:   "Error: Data order tidak ditemukan",
+			Response: err.Error(),
+		})
+		return
+	}
+
+	if len(data) == 0 {
+		at.WriteJSON(respw, http.StatusNotFound, model.Response{
+			Status: "Error: Data order kosong",
+		})
+		return
+	}
+
+	var orders []map[string]interface{}
+	for _, order := range data {
+		orders = append(orders, map[string]interface{}{
+			"id":             order.ID.Hex(),
+			"order_number":   order.OrderNumber,
+			"queue_number":   order.QueueNumber,
+			"order_date":     order.OrderDate, // Karena sudah dalam format string
+			"user_id":        order.UserID.Hex(),
+			"user_info": map[string]interface{}{
+				"name":     order.UserInfo.Name,
+				"whatsapp": order.UserInfo.Whatsapp,
+				"note":     order.UserInfo.Note,
+			},
+			"orders":          order.Orders,
+			"total":           formatrupiah(order.Total),
+			"payment_method":  order.PaymentMethod,
+			"status":          order.Status,
+			"created_by":      order.CreatedBy,
+			"created_by_role": order.CreatedByRole,
+			"created_at":      time.Unix(order.CreatedAt, 0).Format("15:04:05 02-01-2006"),
+		})
+	}
+
+	at.WriteJSON(respw, http.StatusOK, map[string]interface{}{
+		"status":  "success",
+		"message": "Data order berhasil diambil",
+		"data":    orders,
+	})
+}
+
+// GetOrderByID - Ambil Order Berdasarkan ID
+func GetOrderByID(respw http.ResponseWriter, req *http.Request) {
+	// Dekode token WhatsAuth untuk validasi
+	_, err := watoken.Decode(config.PublicKeyWhatsAuth, at.GetLoginFromHeader(req))
+	if err != nil {
+		at.WriteJSON(respw, http.StatusForbidden, model.Response{
+			Status:   "Error: Token Tidak Valid",
+			Location: "Decode Token Error",
+			Response: err.Error(),
+		})
+		return
+	}
+
+	// Ambil ID dari URL
+	pathParts := strings.Split(req.URL.Path, "/")
+	orderID := pathParts[len(pathParts)-1]
+	if orderID == "" {
+		at.WriteJSON(respw, http.StatusBadRequest, model.Response{
+			Status: "Error: ID Order tidak ditemukan di URL",
+		})
+		return
+	}
+
+	// Ubah ID string menjadi ObjectID
+	objectID, err := primitive.ObjectIDFromHex(orderID)
+	if err != nil {
+		at.WriteJSON(respw, http.StatusBadRequest, model.Response{
+			Status: "Error: ID Order tidak valid",
+		})
+		return
+	}
+
+	// Ambil data order berdasarkan ID
+	order, err := atdb.GetOneDoc[model.Order](config.Mongoconn, "orders", bson.M{"_id": objectID})
+	if err != nil {
+		at.WriteJSON(respw, http.StatusNotFound, model.Response{
+			Status:   "Error: Order tidak ditemukan",
+			Response: err.Error(),
+		})
+		return
+	}
+
+	// Membuat response untuk data order lengkap
+	response := map[string]interface{}{
+		"status":  "success",
+		"message": "Order ditemukan",
+		"data": map[string]interface{}{
+			"id":             order.ID.Hex(),
+			"order_number":   order.OrderNumber,
+			"queue_number":   order.QueueNumber,
+			"order_date":     order.OrderDate, // Karena sudah dalam format string
+			"user_id":        order.UserID.Hex(),
+			"user_info": map[string]interface{}{
+				"name":     order.UserInfo.Name,
+				"whatsapp": order.UserInfo.Whatsapp,
+				"note":     order.UserInfo.Note,
+			},
+			"orders":          order.Orders,
+			"total":           formatrupiah(order.Total),
+			"payment_method":  order.PaymentMethod,
+			"status":          order.Status,
+			"created_by":      order.CreatedBy,
+			"created_by_role": order.CreatedByRole,
+			"created_at":      time.Unix(order.CreatedAt, 0).Format("15:04:05 02-01-2006"),
 		},
 	}
 

@@ -223,9 +223,9 @@ func URL(w http.ResponseWriter, r *http.Request) {
 
 		// Order routes
 	case method == "GET" && path == "/data/menu":
-		controller.GetAllMenu(w, r)
+		controller.GetAllOrder(w, r)
 	case method == "GET" && at.URLParam(path, "/data/menu/:id"):
-		controller.GetMenuByID(w, r)
+		controller.GetOrderByID(w, r)
 	case method == "POST" && path == "/data/menu":
 		controller.CreateOrder(w, r)
 	case method == "PUT" && at.URLParam(path, "/data/menu/:id"):
