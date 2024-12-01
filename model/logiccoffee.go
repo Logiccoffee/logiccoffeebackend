@@ -34,7 +34,6 @@ type Order struct {
     OrderNumber      string             `bson:"orderNumber"`        // Unique order number
 	QueueNumber      int                `bson:"queueNumber"`        // Nomor antrian
 	OrderDate        time.Time          `bson:"orderDate"`          // Tanggal dan waktu pesanan
-	LastQueueDate    string             `bson:"lastQueueDate"`      // Tanggal terakhir reset nomor antrian
 	DailyQueueCounter int               `bson:"dailyQueueCounter"`  // Nomor antrian terakhir pada hari itu
     UserID            primitive.ObjectID `json:"user_id,omitempty" bson:"user_id,omitempty"`      // ID pengguna yang memesan (jika dari web)
     UserInfo          UserInfo           `json:"user_info,omitempty" bson:"user_info,omitempty"`  // Informasi user (jika dari web)

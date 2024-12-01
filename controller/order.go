@@ -65,8 +65,7 @@ if err != nil {
 	newOrder := model.Order{
 		OrderNumber:   order.OrderNumber,
 		QueueNumber:   order.QueueNumber,
-		OrderDate:     time.Now(),
-		LastQueueDate: time.Now().Format("2006-01-02"),
+		OrderDate: time.Now(),
 		UserID:        user.ID,
 		UserInfo: model.UserInfo{
 			Name:     order.UserInfo.Name,     // Jika ada data dari frontend, gunakan data tersebut
@@ -99,7 +98,7 @@ if err != nil {
 		"data": map[string]interface{}{
 			"order_number":   newOrder.OrderNumber,
 			"queue_number":   newOrder.QueueNumber,
-			"order_date":     newOrder.OrderDate.Format("2006-01-02 15:04:05"),
+			"order_date":     newOrder.OrderDate.Format("15:04:05 02-01-2006"),
 			"total":          formatrupiah(newOrder.Total),
 			"payment_method": newOrder.PaymentMethod,
 			"status":         newOrder.Status,
