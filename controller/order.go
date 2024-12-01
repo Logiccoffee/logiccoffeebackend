@@ -2,66 +2,110 @@ package controller
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
-	"strconv"
-	"strings"
+	"time"
 
 	"github.com/gocroot/config"
 	"github.com/gocroot/helper/at"
-	"github.com/gocroot/helper/atapi"
 	"github.com/gocroot/helper/atdb"
-	"github.com/gocroot/helper/jualin"
+	"github.com/gocroot/helper/watoken"
 	"github.com/gocroot/model"
+	"go.mongodb.org/mongo-driver/bson"
+	// "go.mongodb.org/mongo-driver/bson/primitive"
+	"golang.org/x/text/language"
+	"golang.org/x/text/message"
 )
 
-// Fungsi untuk menangani request order
-func HandleOrder(w http.ResponseWriter, r *http.Request) {
-	namalapak := at.GetParam(r)
-	var orderRequest jualin.PaymentRequest
-
-	// Decode JSON request ke struct
-	decoder := json.NewDecoder(r.Body)
-	if err := decoder.Decode(&orderRequest); err != nil {
-		http.Error(w, "Bad request", http.StatusBadRequest)
-		return
-	}
-	_, err := atdb.InsertOneDoc(config.Mongoconn, "order", orderRequest)
-	if err != nil {
-		http.Error(w, "Insert Database Gagal", http.StatusBadRequest)
-		return
-	}
-
-	//kirim pesan ke tenant
-	message := "*Pesanan Masuk " + namalapak + "*\n" + orderRequest.User.Name + "\n" + orderRequest.User.Whatsapp + "\n" + orderRequest.User.Address + "\n" + createOrderMessage(orderRequest.Orders) + "\nTotal: " + strconv.Itoa(orderRequest.Total) + "\nPembayaran: " + orderRequest.PaymentMethod
-	newmsg := model.SendText{
-		To:       "628111269691",
-		IsGroup:  false,
-		Messages: message,
-	}
-	_, _, err = atapi.PostStructWithToken[model.Response]("token", config.WAAPIToken, newmsg, config.WAAPIMessage)
-	if err != nil {
-		http.Error(w, "Gagal Mengirim pesan", http.StatusBadRequest)
-		return
-	}
-	// Cetak data order ke terminal (bisa diganti dengan logic lain, misal menyimpan ke database)
-	fmt.Printf("Received Order: %+v\n", orderRequest)
-
-	// Kirim response kembali ke client
-	w.Header().Set("Content-Type", "application/json")
-	response := map[string]string{"status": "success", "message": "Order received"}
-	json.NewEncoder(w).Encode(response)
+func formatrupiah(price float64) string {
+	formatter := message.NewPrinter(language.Indonesian)
+	return formatter.Sprintf("Rp %.2f", price)
 }
 
-// Fungsi untuk membuat pesan dari orders
-func createOrderMessage(orders []jualin.Order) string {
-	var orderStrings []string
-
-	for _, order := range orders {
-		orderString := fmt.Sprintf("%s x%d - Rp %d", order.Name, order.Quantity, order.Price)
-		orderStrings = append(orderStrings, orderString)
+// CreateOrder - Membuat order baru
+// CreateOrder - Membuat order baru
+func CreateOrder(respw http.ResponseWriter, req *http.Request) {
+	// Dekode token WhatsAuth untuk mengambil informasi pengguna
+	payload, err := watoken.Decode(config.PublicKeyWhatsAuth, at.GetLoginFromHeader(req))
+	if err != nil {
+		at.WriteJSON(respw, http.StatusForbidden, model.Response{
+			Status:   "Error: Token Tidak Valid",
+			Location: "Decode Token Error",
+			Response: err.Error(),
+		})
+		return
 	}
 
-	// Gabungkan semua orders menjadi satu string dengan new line sebagai separator
-	return strings.Join(orderStrings, "\n")
+	// Ambil data JSON dari body request
+	var order model.Order
+	if err := json.NewDecoder(req.Body).Decode(&order); err != nil {
+		at.WriteJSON(respw, http.StatusBadRequest, model.Response{
+			Status:   "Error: Bad Request",
+			Response: err.Error(),
+		})
+		return
+	}
+
+	// Ambil data user berdasarkan PhoneNumber yang ada di payload dari database
+var user model.Userdomyikado
+filter := bson.M{"phonenumber": payload.Id}
+
+// Gunakan operator =, bukan :=, karena variabel 'user' sudah ada
+user, err = atdb.GetOneDoc[model.Userdomyikado](config.Mongoconn, "user", filter)
+if err != nil {
+	at.WriteJSON(respw, http.StatusNotFound, model.Response{
+		Status:   "Error: Data Pengguna Tidak Ditemukan",
+		Response: err.Error(),
+	})
+	return
+}
+
+
+
+	// Membuat order baru dengan data dari request body atau default dari database
+	newOrder := model.Order{
+		OrderNumber:   order.OrderNumber,
+		QueueNumber:   order.QueueNumber,
+		OrderDate:     time.Now(),
+		LastQueueDate: time.Now().Format("2006-01-02"),
+		UserID:        user.ID,
+		UserInfo: model.UserInfo{
+			Name:     order.UserInfo.Name,     // Jika ada data dari frontend, gunakan data tersebut
+			Whatsapp: order.UserInfo.Whatsapp, // Jika ada data dari frontend, gunakan data tersebut
+			Note:     order.UserInfo.Note,     // Jika ada data dari frontend, gunakan data tersebut
+		},
+		Orders:        order.Orders,
+		Total:         order.Total,
+		PaymentMethod: order.PaymentMethod,
+		Status:        "terkirim",
+		CreatedBy:     user.Name,
+		CreatedByRole: user.Role,
+		CreatedAt:     time.Now().Unix(),
+	}
+	// Simpan ke database MongoDB tanpa menggunakan InsertedID
+	insertResult, err := atdb.InsertOneDoc(config.Mongoconn, "orders", newOrder)
+	if err != nil {
+		at.WriteJSON(respw, http.StatusInternalServerError, model.Response{
+			Status:   "Error: Gagal Insert Database",
+			Response: err.Error(),
+		})
+		return
+	}
+	newOrder.ID = insertResult
+	// Membuat response data
+	response := map[string]interface{}{
+		"status":  "success",
+		"message": "Order berhasil dibuat",
+		"user":    user.Name, // Gunakan nama user dari database
+		"data": map[string]interface{}{
+			"order_number":   newOrder.OrderNumber,
+			"queue_number":   newOrder.QueueNumber,
+			"order_date":     newOrder.OrderDate.Format("2006-01-02 15:04:05"),
+			"total":          formatrupiah(newOrder.Total),
+			"payment_method": newOrder.PaymentMethod,
+			"status":         newOrder.Status,
+		},
+	}
+
+	// Kirim response ke client
+	at.WriteJSON(respw, http.StatusOK, response)
 }

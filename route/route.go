@@ -82,7 +82,7 @@ func URL(w http.ResponseWriter, r *http.Request) {
 	case method == "POST" && path == "/data/tiket/rate":
 		controller.PostMasukanTiket(w, r)
 
-		// order
+		// orders.go
 	case method == "POST" && at.URLParam(path, "/data/order/:namalapak"):
 		controller.HandleOrder(w, r)
 
@@ -216,6 +216,18 @@ func URL(w http.ResponseWriter, r *http.Request) {
 		controller.GetMenuByID(w, r)
 	case method == "POST" && path == "/data/menu":
 		controller.CreateMenu(w, r)
+	case method == "PUT" && at.URLParam(path, "/data/menu/:id"):
+		controller.UpdateMenu(w, r)
+	case method == "DELETE" && at.URLParam(path, "/data/menu/:id"):
+		controller.DeleteMenu(w, r)
+
+		// Order routes
+	case method == "GET" && path == "/data/menu":
+		controller.GetAllMenu(w, r)
+	case method == "GET" && at.URLParam(path, "/data/menu/:id"):
+		controller.GetMenuByID(w, r)
+	case method == "POST" && path == "/data/menu":
+		controller.CreateOrder(w, r)
 	case method == "PUT" && at.URLParam(path, "/data/menu/:id"):
 		controller.UpdateMenu(w, r)
 	case method == "DELETE" && at.URLParam(path, "/data/menu/:id"):
