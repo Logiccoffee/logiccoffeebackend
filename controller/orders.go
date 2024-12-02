@@ -54,7 +54,7 @@ func HandleOrder(w http.ResponseWriter, r *http.Request) {
 }
 
 // Fungsi untuk membuat pesan dari orders
-func createOrderMessage(orders []jualin.Order) string {
+func createOrderMessage(orders []jualin.Orders) string {
 	var orderStrings []string
 
 	for _, order := range orders {

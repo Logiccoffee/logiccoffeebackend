@@ -23,7 +23,6 @@ func formatrupiah(price float64) string {
 }
 
 // CreateOrder - Membuat order baru
-// CreateOrder - Membuat order baru
 func CreateOrder(respw http.ResponseWriter, req *http.Request) {
 	// Dekode token WhatsAuth untuk mengambil informasi pengguna
 	payload, err := watoken.Decode(config.PublicKeyWhatsAuth, at.GetLoginFromHeader(req))
@@ -46,42 +45,57 @@ func CreateOrder(respw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	// Ambil data user berdasarkan PhoneNumber yang ada di payload dari database
-var user model.Userdomyikado
-filter := bson.M{"phonenumber": payload.Id}
+	// Dapatkan data user dari token untuk mencatat CreatedBy dan CreatedByRole
+	var user model.Userdomyikado
+	filter := bson.M{"phonenumber": payload.Id}
+	user, err = atdb.GetOneDoc[model.Userdomyikado](config.Mongoconn, "user", filter)
+	if err != nil {
+		at.WriteJSON(respw, http.StatusNotFound, model.Response{
+			Status:   "Error: Data Pengguna Tidak Ditemukan",
+			Response: err.Error(),
+		})
+		return
+	}
 
-// Gunakan operator =, bukan :=, karena variabel 'user' sudah ada
-user, err = atdb.GetOneDoc[model.Userdomyikado](config.Mongoconn, "user", filter)
-if err != nil {
-	at.WriteJSON(respw, http.StatusNotFound, model.Response{
-		Status:   "Error: Data Pengguna Tidak Ditemukan",
-		Response: err.Error(),
-	})
-	return
-}
+	// Pastikan UserInfo diisi manual di backend berdasarkan data request
+	if order.UserInfo.Name == "" || order.UserInfo.Whatsapp == "" {
+		at.WriteJSON(respw, http.StatusBadRequest, model.Response{
+			Status:   "Error: Bad Request",
+			Response: "UserInfo harus berisi Name dan Whatsapp",
+		})
+		return
+	}
 
+	// Validasi PaymentMethod
+	allowedPaymentMethods := map[string]bool{"Cash": true}
+	if !allowedPaymentMethods[order.PaymentMethod] {
+		at.WriteJSON(respw, http.StatusBadRequest, model.Response{
+			Status:   "Error: Invalid Payment Method",
+			Response: "Metode pembayaran hanya diperbolehkan 'Cash'",
+		})
+		return
+	}
 
-
-	// Membuat order baru dengan data dari request body atau default dari database
+	// Membuat order baru berdasarkan data dari frontend
 	newOrder := model.Order{
 		OrderNumber:   order.OrderNumber,
 		QueueNumber:   order.QueueNumber,
-		OrderDate: time.Now(),
-		UserID:        user.ID,
+		OrderDate:     time.Now(), // Gunakan waktu sekarang
+		UserID:        user.ID,   // UserID hanya untuk referensi
 		UserInfo: model.UserInfo{
-			Name:     order.UserInfo.Name,     // Jika ada data dari frontend, gunakan data tersebut
-			Whatsapp: order.UserInfo.Whatsapp, // Jika ada data dari frontend, gunakan data tersebut
-			Note:     order.UserInfo.Note,     // Jika ada data dari frontend, gunakan data tersebut
+			Name:     order.UserInfo.Name,
+			Whatsapp: order.UserInfo.Whatsapp,
+			Note:     order.UserInfo.Note, // Note opsional
 		},
 		Orders:        order.Orders,
 		Total:         order.Total,
 		PaymentMethod: order.PaymentMethod,
 		Status:        "terkirim",
-		CreatedBy:     user.Name,
-		CreatedByRole: user.Role,
-		CreatedAt:     time.Now().Unix(),
+		CreatedBy:     user.Name, // Dari data user
+		CreatedByRole: user.Role, // Dari data user
 	}
-	// Simpan ke database MongoDB tanpa menggunakan InsertedID
+
+	// Simpan order baru ke database
 	insertResult, err := atdb.InsertOneDoc(config.Mongoconn, "orders", newOrder)
 	if err != nil {
 		at.WriteJSON(respw, http.StatusInternalServerError, model.Response{
@@ -90,20 +104,20 @@ if err != nil {
 		})
 		return
 	}
+
+	// Tambahkan ID yang dihasilkan ke newOrder
 	newOrder.ID = insertResult
-	// Membuat response data
+
+	// Format waktu Indonesia
+	loc, _ := time.LoadLocation("Asia/Jakarta")
+	formattedOrderDate := newOrder.OrderDate.In(loc).Format("15:04:05 02-01-2006")
+
+	// Membuat response lengkap
 	response := map[string]interface{}{
 		"status":  "success",
 		"message": "Order berhasil dibuat",
-		"user":    user.Name, // Gunakan nama user dari database
-		"data": map[string]interface{}{
-			"order_number":   newOrder.OrderNumber,
-			"queue_number":   newOrder.QueueNumber,
-			"order_date":     newOrder.OrderDate.Format("15:04:05 02-01-2006"),
-			"total":          formatrupiah(newOrder.Total),
-			"payment_method": newOrder.PaymentMethod,
-			"status":         newOrder.Status,
-		},
+		"data":    newOrder,
+		"formatted_date": formattedOrderDate, // Tanggal dalam format Indonesia
 	}
 
 	// Kirim response ke client
@@ -146,7 +160,7 @@ func GetAllOrder(respw http.ResponseWriter, req *http.Request) {
 			"id":             order.ID.Hex(),
 			"order_number":   order.OrderNumber,
 			"queue_number":   order.QueueNumber,
-			"order_date":     order.OrderDate, // Karena sudah dalam format string
+			"order_date":     order.OrderDate.Format("2006-01-02 15:04:05"), // Format Indonesia
 			"user_id":        order.UserID.Hex(),
 			"user_info": map[string]interface{}{
 				"name":     order.UserInfo.Name,
@@ -159,7 +173,6 @@ func GetAllOrder(respw http.ResponseWriter, req *http.Request) {
 			"status":          order.Status,
 			"created_by":      order.CreatedBy,
 			"created_by_role": order.CreatedByRole,
-			"created_at":      time.Unix(order.CreatedAt, 0).Format("15:04:05 02-01-2006"),
 		})
 	}
 
@@ -220,7 +233,7 @@ func GetOrderByID(respw http.ResponseWriter, req *http.Request) {
 			"id":             order.ID.Hex(),
 			"order_number":   order.OrderNumber,
 			"queue_number":   order.QueueNumber,
-			"order_date":     order.OrderDate, // Karena sudah dalam format string
+			"order_date":     order.OrderDate.Format("2006-01-02 15:04:05"), // Format Indonesia
 			"user_id":        order.UserID.Hex(),
 			"user_info": map[string]interface{}{
 				"name":     order.UserInfo.Name,
@@ -233,7 +246,6 @@ func GetOrderByID(respw http.ResponseWriter, req *http.Request) {
 			"status":          order.Status,
 			"created_by":      order.CreatedBy,
 			"created_by_role": order.CreatedByRole,
-			"created_at":      time.Unix(order.CreatedAt, 0).Format("15:04:05 02-01-2006"),
 		},
 	}
 
@@ -242,105 +254,114 @@ func GetOrderByID(respw http.ResponseWriter, req *http.Request) {
 }
 
 func UpdateOrder(respw http.ResponseWriter, req *http.Request) {
-    // Ambil token dari header dan decode menggunakan public key
+    // Decode token untuk mendapatkan payload pengguna
     payload, err := watoken.Decode(config.PublicKeyWhatsAuth, at.GetLoginFromHeader(req))
     if err != nil {
-        var respn model.Response
-        respn.Status = "Error: Token Tidak Valid"
-        respn.Info = at.GetSecretFromHeader(req)
-        respn.Location = "Decode Token Error"
-        respn.Response = err.Error()
-        at.WriteJSON(respw, http.StatusForbidden, respn)
+        at.WriteJSON(respw, http.StatusForbidden, map[string]string{"error": "Token tidak valid"})
         return
     }
 
     // Ambil ID order dari URL
     pathParts := strings.Split(req.URL.Path, "/")
-    orderID := pathParts[len(pathParts)-1] // Ambil bagian terakhir dari URL
+    orderID := pathParts[len(pathParts)-1]
     if orderID == "" {
-        var respn model.Response
-        respn.Status = "Error: ID Order tidak ditemukan di URL"
-        at.WriteJSON(respw, http.StatusBadRequest, respn)
+        at.WriteJSON(respw, http.StatusBadRequest, map[string]string{"error": "ID Order tidak ditemukan"})
         return
     }
 
     // Konversi ID order ke ObjectID MongoDB
     objectID, err := primitive.ObjectIDFromHex(orderID)
     if err != nil {
-        var respn model.Response
-        respn.Status = "Error: ID Order tidak valid"
-        at.WriteJSON(respw, http.StatusBadRequest, respn)
+        at.WriteJSON(respw, http.StatusBadRequest, map[string]string{"error": "ID Order tidak valid"})
         return
     }
 
-    // Decode body langsung ke map
+    // Decode body request ke map
     var requestBody map[string]interface{}
-    err = json.NewDecoder(req.Body).Decode(&requestBody)
+    if err := json.NewDecoder(req.Body).Decode(&requestBody); err != nil {
+        at.WriteJSON(respw, http.StatusBadRequest, map[string]string{"error": "Gagal membaca data JSON"})
+        return
+    }
+
+    // Ambil data pesanan saat ini untuk validasi status
+    currentOrder, err := atdb.GetOneDoc[model.Order](config.Mongoconn, "orders", bson.M{"_id": objectID})
     if err != nil {
-        var respn model.Response
-        respn.Status = "Error: Gagal membaca data JSON"
-        respn.Response = err.Error()
-        at.WriteJSON(respw, http.StatusBadRequest, respn)
+        at.WriteJSON(respw, http.StatusInternalServerError, map[string]string{"error": "Gagal mengambil data pesanan"})
         return
     }
 
-    // Periksa apakah body request kosong
-    if len(requestBody) == 0 {
-        var respn model.Response
-        respn.Status = "Error: Tidak ada data untuk diperbarui"
-        at.WriteJSON(respw, http.StatusBadRequest, respn)
-        return
-    }
-
-    // Menyiapkan data untuk update (langsung menggantikan field yang diberikan)
+    // Siapkan data untuk update
     updateData := bson.M{}
-    if name, exists := requestBody["name"]; exists && name != "" {
-        updateData["name"] = name
-    }
-    if phonenumber, exists := requestBody["phonenumber"]; exists && phonenumber != "" {
-        updateData["phonenumber"] = phonenumber
-    }
-    if status, exists := requestBody["status"]; exists && status != "" {
-        updateData["status"] = status
+
+    // Validasi dan update UserInfo
+    if userInfo, exists := requestBody["user_info"]; exists {
+        if userInfoMap, ok := userInfo.(map[string]interface{}); ok {
+            updateData["user_info"] = userInfoMap
+        }
     }
 
-    // Jika tidak ada perubahan data, beri respon error
+    // Validasi dan update Orders
+    if orders, exists := requestBody["orders"]; exists {
+        if ordersArray, ok := orders.([]interface{}); ok {
+            updateData["orders"] = ordersArray
+        }
+    }
+
+    // Validasi dan update Status
+    if status, exists := requestBody["status"]; exists {
+        if statusStr, ok := status.(string); ok {
+            if statusStr == "diproses" || statusStr == "selesai" {
+                updateData["status"] = statusStr
+            } else if statusStr == "dibatalkan" {
+                // Cek apakah status saat ini memungkinkan pembatalan
+                if currentOrder.Status != "terkirim" {
+                    at.WriteJSON(respw, http.StatusBadRequest, map[string]string{
+                        "error": "Pesanan tidak dapat dibatalkan karena status saat ini adalah '" + currentOrder.Status + "'",
+                    })
+                    return
+                }
+                updateData["status"] = "dibatalkan"
+            }
+        }
+    }
+
+    // Pastikan queueNumber tidak diizinkan untuk diubah
+    if _, exists := requestBody["queue_number"]; exists {
+        at.WriteJSON(respw, http.StatusForbidden, map[string]string{
+            "error": "Queue number tidak dapat diubah",
+        })
+        return
+    }
+
+    // Pastikan ada data yang diupdate
     if len(updateData) == 0 {
-        var respn model.Response
-        respn.Status = "Error: Tidak ada perubahan yang dilakukan"
-        at.WriteJSON(respw, http.StatusNotModified, respn)
+        at.WriteJSON(respw, http.StatusBadRequest, map[string]string{"error": "Tidak ada perubahan yang dilakukan"})
         return
     }
 
-    // Update data order
-    result, err := atdb.UpdateOneDoc(config.Mongoconn, "orders", bson.M{"_id": objectID}, updateData)
+    // Update data order di database
+    result, err := atdb.UpdateOneDoc(config.Mongoconn, "orders", bson.M{"_id": objectID}, bson.M{"$set": updateData})
     if err != nil {
-        var respn model.Response
-        respn.Status = "Error: Gagal mengupdate order"
-        respn.Response = err.Error()
-        at.WriteJSON(respw, http.StatusInternalServerError, respn)
+        at.WriteJSON(respw, http.StatusInternalServerError, map[string]string{"error": "Gagal mengupdate order"})
         return
     }
 
-    // Jika tidak ada dokumen yang dimodifikasi, beri respons error
+    // Periksa apakah ada dokumen yang dimodifikasi
     if result.ModifiedCount == 0 {
-        var respn model.Response
-        respn.Status = "Error: Tidak ada perubahan yang dilakukan"
-        at.WriteJSON(respw, http.StatusNotModified, respn)
+        at.WriteJSON(respw, http.StatusNotModified, map[string]string{"error": "Tidak ada perubahan yang dilakukan"})
         return
     }
 
     // Respons sukses
-    response := map[string]interface{}{
+    at.WriteJSON(respw, http.StatusOK, map[string]interface{}{
         "status":  "success",
         "message": "Order berhasil diupdate",
         "data": map[string]interface{}{
             "id":            objectID.Hex(),
             "updatedFields": updateData,
         },
-		"updatedBy": payload.Alias,
-    }
-    at.WriteJSON(respw, http.StatusOK, response)
+        "updatedBy": payload.Alias,
+    })
 }
 
 func DeleteOrder(respw http.ResponseWriter, req *http.Request) {

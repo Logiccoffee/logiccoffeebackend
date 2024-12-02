@@ -1,6 +1,6 @@
 package jualin
 
-type Order struct {
+type Orders struct {
 	Name     string `json:"name" bson:"name"`
 	Quantity int    `json:"quantity" bson:"quantity"`
 	Price    int    `json:"price" bson:"price"`
@@ -13,7 +13,7 @@ type User struct {
 }
 
 type PaymentRequest struct {
-	Orders        []Order `json:"orders" bson:"orders"`
+	Orders        []Orders`json:"orders" bson:"orders"`
 	Total         int     `json:"total" bson:"total"`
 	User          User    `json:"user" bson:"user"`
 	Payment       string  `json:"payment" bson:"payment"`
