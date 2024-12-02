@@ -16,16 +16,28 @@ import (
 
 func CreateCategory(respw http.ResponseWriter, req *http.Request) {
     // Decode token untuk validasi
+    // payload, err := watoken.Decode(config.PublicKeyWhatsAuth, at.GetLoginFromHeader(req))
+	// if err != nil {
+	// 	var respn model.Response
+	// 	respn.Status = "Error : Token Tidak Valid "
+	// 	respn.Info = config.PublicKeyWhatsAuth
+	// 	respn.Location = "Decode Token Error: " + at.GetLoginFromHeader(req)
+	// 	respn.Response = err.Error()
+	// 	at.WriteJSON(respw, http.StatusForbidden, respn)
+	// 	return
+	// }
+
+    // try change payload
     payload, err := watoken.Decode(config.PublicKeyWhatsAuth, at.GetLoginFromHeader(req))
 	if err != nil {
-		var respn model.Response
-		respn.Status = "Error : Token Tidak Valid "
-		respn.Info = config.PublicKeyWhatsAuth
-		respn.Location = "Decode Token Error: " + at.GetLoginFromHeader(req)
-		respn.Response = err.Error()
-		at.WriteJSON(respw, http.StatusForbidden, respn)
+		at.WriteJSON(respw, http.StatusForbidden, model.Response{
+			Status:   "Error: Token Tidak Valid",
+			Location: "Decode Token Error",
+			Response: err.Error(),
+		})
 		return
 	}
+
 
     // Decode body untuk mendapatkan data kategori
     var category model.Category
