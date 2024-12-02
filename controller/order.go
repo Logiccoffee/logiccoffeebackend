@@ -240,3 +240,165 @@ func GetOrderByID(respw http.ResponseWriter, req *http.Request) {
 	// Kirim response ke client
 	at.WriteJSON(respw, http.StatusOK, response)
 }
+
+func UpdateOrder(respw http.ResponseWriter, req *http.Request) {
+    // Ambil token dari header dan decode menggunakan public key
+    payload, err := watoken.Decode(config.PublicKeyWhatsAuth, at.GetLoginFromHeader(req))
+    if err != nil {
+        var respn model.Response
+        respn.Status = "Error: Token Tidak Valid"
+        respn.Info = at.GetSecretFromHeader(req)
+        respn.Location = "Decode Token Error"
+        respn.Response = err.Error()
+        at.WriteJSON(respw, http.StatusForbidden, respn)
+        return
+    }
+
+    // Ambil ID order dari URL
+    pathParts := strings.Split(req.URL.Path, "/")
+    orderID := pathParts[len(pathParts)-1] // Ambil bagian terakhir dari URL
+    if orderID == "" {
+        var respn model.Response
+        respn.Status = "Error: ID Order tidak ditemukan di URL"
+        at.WriteJSON(respw, http.StatusBadRequest, respn)
+        return
+    }
+
+    // Konversi ID order ke ObjectID MongoDB
+    objectID, err := primitive.ObjectIDFromHex(orderID)
+    if err != nil {
+        var respn model.Response
+        respn.Status = "Error: ID Order tidak valid"
+        at.WriteJSON(respw, http.StatusBadRequest, respn)
+        return
+    }
+
+    // Decode body langsung ke map
+    var requestBody map[string]interface{}
+    err = json.NewDecoder(req.Body).Decode(&requestBody)
+    if err != nil {
+        var respn model.Response
+        respn.Status = "Error: Gagal membaca data JSON"
+        respn.Response = err.Error()
+        at.WriteJSON(respw, http.StatusBadRequest, respn)
+        return
+    }
+
+    // Periksa apakah body request kosong
+    if len(requestBody) == 0 {
+        var respn model.Response
+        respn.Status = "Error: Tidak ada data untuk diperbarui"
+        at.WriteJSON(respw, http.StatusBadRequest, respn)
+        return
+    }
+
+    // Menyiapkan data untuk update (langsung menggantikan field yang diberikan)
+    updateData := bson.M{}
+    if name, exists := requestBody["name"]; exists && name != "" {
+        updateData["name"] = name
+    }
+    if phonenumber, exists := requestBody["phonenumber"]; exists && phonenumber != "" {
+        updateData["phonenumber"] = phonenumber
+    }
+    if status, exists := requestBody["status"]; exists && status != "" {
+        updateData["status"] = status
+    }
+
+    // Jika tidak ada perubahan data, beri respon error
+    if len(updateData) == 0 {
+        var respn model.Response
+        respn.Status = "Error: Tidak ada perubahan yang dilakukan"
+        at.WriteJSON(respw, http.StatusNotModified, respn)
+        return
+    }
+
+    // Update data order
+    result, err := atdb.UpdateOneDoc(config.Mongoconn, "orders", bson.M{"_id": objectID}, updateData)
+    if err != nil {
+        var respn model.Response
+        respn.Status = "Error: Gagal mengupdate order"
+        respn.Response = err.Error()
+        at.WriteJSON(respw, http.StatusInternalServerError, respn)
+        return
+    }
+
+    // Jika tidak ada dokumen yang dimodifikasi, beri respons error
+    if result.ModifiedCount == 0 {
+        var respn model.Response
+        respn.Status = "Error: Tidak ada perubahan yang dilakukan"
+        at.WriteJSON(respw, http.StatusNotModified, respn)
+        return
+    }
+
+    // Respons sukses
+    response := map[string]interface{}{
+        "status":  "success",
+        "message": "Order berhasil diupdate",
+        "data": map[string]interface{}{
+            "id":            objectID.Hex(),
+            "updatedFields": updateData,
+        },
+		"updatedBy": payload.Alias,
+    }
+    at.WriteJSON(respw, http.StatusOK, response)
+}
+
+func DeleteOrder(respw http.ResponseWriter, req *http.Request) {
+    // Ambil token dari header dan decode menggunakan public key
+    payload, err := watoken.Decode(config.PublicKeyWhatsAuth, at.GetLoginFromHeader(req))
+    if err != nil {
+        var respn model.Response
+        respn.Status = "Error: Token Tidak Valid"
+        respn.Info = at.GetSecretFromHeader(req)
+        respn.Location = "Decode Token Error"
+        respn.Response = err.Error()
+        at.WriteJSON(respw, http.StatusForbidden, respn)
+        return
+    }
+
+    // Ambil ID order dari URL
+    pathParts := strings.Split(req.URL.Path, "/")
+    orderID := pathParts[len(pathParts)-1] // Ambil bagian terakhir dari URL
+    if orderID == "" {
+        var respn model.Response
+        respn.Status = "Error: ID Order tidak ditemukan di URL"
+        at.WriteJSON(respw, http.StatusBadRequest, respn)
+        return
+    }
+
+    // Konversi ID order ke ObjectID MongoDB
+    objectID, err := primitive.ObjectIDFromHex(orderID)
+    if err != nil {
+        var respn model.Response
+        respn.Status = "Error: ID Order tidak valid"
+        at.WriteJSON(respw, http.StatusBadRequest, respn)
+        return
+    }
+
+    // Hapus data order berdasarkan ID
+    filter := bson.M{"_id": objectID}
+    deleteResult, err := atdb.DeleteOneDoc(config.Mongoconn, "orders", filter)
+    if err != nil {
+        var respn model.Response
+        respn.Status = "Error: Gagal menghapus order"
+        respn.Response = err.Error()
+        at.WriteJSON(respw, http.StatusInternalServerError, respn)
+        return
+    }
+
+    if deleteResult.DeletedCount == 0 {
+        var respn model.Response
+        respn.Status = "Error: Order tidak ditemukan"
+        at.WriteJSON(respw, http.StatusNotFound, respn)
+        return
+    }
+
+    // Berhasil menghapus order
+    response := map[string]interface{}{
+        "status":  "success",
+        "message": "Order berhasil dihapus",
+        "user":    payload.Alias,
+        "data":    deleteResult,
+    }
+    at.WriteJSON(respw, http.StatusOK, response)
+}

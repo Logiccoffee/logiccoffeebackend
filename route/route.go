@@ -222,16 +222,16 @@ func URL(w http.ResponseWriter, r *http.Request) {
 		controller.DeleteMenu(w, r)
 
 		// Order routes
-	case method == "GET" && path == "/data/menu":
+	case method == "GET" && path == "/data/order":
 		controller.GetAllOrder(w, r)
-	case method == "GET" && at.URLParam(path, "/data/menu/:id"):
+	case method == "GET" && at.URLParam(path, "/data/order/:id"):
 		controller.GetOrderByID(w, r)
-	case method == "POST" && path == "/data/menu":
+	case method == "POST" && path == "/data/order":
 		controller.CreateOrder(w, r)
-	case method == "PUT" && at.URLParam(path, "/data/menu/:id"):
-		controller.UpdateMenu(w, r)
-	case method == "DELETE" && at.URLParam(path, "/data/menu/:id"):
-		controller.DeleteMenu(w, r)
+	case method == "PUT" && at.URLParam(path, "/data/order/:id"):
+		controller.UpdateOrder(w, r)
+	case method == "DELETE" && at.URLParam(path, "/data/order/:id"):
+		controller.DeleteOrder(w, r)
 
 	// Banner routes
 	case method == "GET" && path == "/data/banner":

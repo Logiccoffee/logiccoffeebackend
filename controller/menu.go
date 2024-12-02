@@ -169,6 +169,17 @@ func GetMenuByID(respw http.ResponseWriter, req *http.Request) {
 }
 
 func UpdateMenu(respw http.ResponseWriter, req *http.Request) {
+    // Ambil token dari header dan decode menggunakan public key
+    payload, err := watoken.Decode(config.PublicKeyWhatsAuth, at.GetLoginFromHeader(req))
+    if err != nil {
+        var respn model.Response
+        respn.Status = "Error: Token Tidak Valid"
+        respn.Info = at.GetSecretFromHeader(req)
+        respn.Location = "Decode Token Error"
+        respn.Response = err.Error()
+        at.WriteJSON(respw, http.StatusForbidden, respn)
+        return
+    }
     // Ambil ID menu dari URL
     pathParts := strings.Split(req.URL.Path, "/")
     menuID := pathParts[len(pathParts)-1] // Ambil bagian terakhir dari URL
@@ -270,6 +281,7 @@ func UpdateMenu(respw http.ResponseWriter, req *http.Request) {
             "id":    objectID.Hex(),
             "updatedFields": updateData,
         },
+        "updatedBy": payload.Alias,
     }
     at.WriteJSON(respw, http.StatusOK, response)
 }
