@@ -193,6 +193,16 @@ func URL(w http.ResponseWriter, r *http.Request) {
 	case method == "POST" && path == "/auth/resend":
 		controller.ResendPasswordHandler(w, r)
 
+		// middleware
+	case method == "POST" && at.URLParam(path, "/menu"):
+		checkRoleMiddleware([]string{"user", "dosen"})(menuHandler)(w, r)
+	case method == "POST" && at.URLParam(path, "/dashboard-admin"):
+		checkRoleMiddleware([]string{"admin"})(adminHandler)(w, r)
+	case method == "POST" && at.URLParam(path, "/dashboard-cashier"):
+		checkRoleMiddleware([]string{"cashier"})(cashierHandler)(w, r)
+	default:
+		http.NotFound(w, r)
+
 		// Update user role
 	case method == "PUT" && path == "/updateUserRole":
 		controller.UpdateUserRole(w, r)

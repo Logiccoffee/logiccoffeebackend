@@ -224,7 +224,7 @@ func RegisterUser(respw http.ResponseWriter, req *http.Request) {
     // Kirim data user langsung tanpa wrapping "user"
     at.WriteJSON(respw, http.StatusOK, usr)
 }
-
+// ini buat validasi kalo codingannya punya fathyadanteam wlee
 func isValidPhoneNumber(phone string) bool {
     // Nomor harus dimulai dengan "62" dan memiliki minimal 10 digit
     return strings.HasPrefix(phone, "62") && len(phone) >= 10
