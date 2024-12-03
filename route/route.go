@@ -244,9 +244,9 @@ func URL(w http.ResponseWriter, r *http.Request) {
 		controller.DeleteOrder(w, r)
 
 		// gis
-	case method == "POST" && at.URLParam(path, "/data/roads/"):
+	case method == "POST" && path == "/data/roads":
 		controller.GetRoads(w, r)
-	case method == "POST" && at.URLParam(path, "/data/region/"):
+	case method == "POST" && path == "/data/region":
 		controller.GetRegion(w, r)
 
 	// Banner routes
