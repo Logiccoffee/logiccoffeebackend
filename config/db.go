@@ -6,8 +6,17 @@ import (
 
 var MongoString string = os.Getenv("MONGOSTRING")
 
+var MongoStringGeo string = "mongodb+srv://fathyapremium:premium@fathyapr.5vlw6.mongodb.net/"
+
 var mongoinfo = atdb.DBInfo{
 	DBString: MongoString,
 	DBName:   "logiccoffee",
 }
 var Mongoconn, ErrorMongoconn = atdb.MongoConnect(mongoinfo)
+
+var MongoInfoGeo = atdb.DBInfo{
+	DBString: MongoStringGeo,
+	DBName:   "gis",
+}
+
+var MongoconnGeo, ErrorMongoconnGeo = atdb.MongoConnect(MongoInfoGeo)

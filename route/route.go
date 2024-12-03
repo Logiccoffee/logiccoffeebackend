@@ -243,6 +243,12 @@ func URL(w http.ResponseWriter, r *http.Request) {
 	case method == "DELETE" && at.URLParam(path, "/data/order/:id"):
 		controller.DeleteOrder(w, r)
 
+		// gis
+	case method == "POST" && at.URLParam(path, "/data/roads/"):
+		controller.GetRoads(w, r)
+	case method == "POST" && at.URLParam(path, "/data/region/"):
+		controller.GetRegion(w, r)
+
 	// Banner routes
 	case method == "GET" && path == "/data/banner":
 		controller.GetAllBanner(w, r)
