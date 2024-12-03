@@ -40,9 +40,12 @@ type Order struct {
 	Total         float64            `json:"total,omitempty" bson:"total,omitempty"`                   // Total harga pesanan (harga satuan * kuantitas per item)
 	PaymentMethod string             `json:"payment_method,omitempty" bson:"payment_method,omitempty"` // Metode pembayaran (Cash/QRIS)
 	// PaymentInfo       string             `json:"payment_info,omitempty" bson:"payment_info,omitempty"`
-	Status        string `json:"status,omitempty" bson:"status,omitempty"`
-	CreatedBy     string `json:"created_by,omitempty" bson:"created_by,omitempty"`           // Nama siapa yang membuat pesanan (user atau kasir)
-	CreatedByRole string `json:"created_by_role,omitempty" bson:"created_by_role,omitempty"` // Role siapa yang membuat pesanan
+	Status        string    `json:"status,omitempty" bson:"status,omitempty"`
+	CreatedBy     string    `json:"created_by,omitempty" bson:"created_by,omitempty"`           // Nama siapa yang membuat pesanan (user atau kasir)
+	CreatedByRole string    `json:"created_by_role,omitempty" bson:"created_by_role,omitempty"` // Role siapa yang membuat pesanan
+	UpdatedBy     string    `bson:"updated_by,omitempty" json:"updated_by,omitempty"`
+	UpdatedByRole string    `bson:"updated_by_role,omitempty" json:"updated_by_role,omitempty"`
+	UpdatedAt     time.Time `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
 }
 
 // UserInfo struct untuk menyimpan informasi pengguna
@@ -58,4 +61,5 @@ type OrderItem struct {
 	MenuName string             `json:"menu_name,omitempty" bson:"menu_name,omitempty"`
 	Price    float64            `json:"price,omitempty" bson:"price,omitempty"`
 	Quantity int                `json:"quantity,omitempty" bson:"quantity,omitempty"` // Kuantitas item
+	// PriceFormatted string  `json:"price_formatted,omitempty" bson:"-"`
 }

@@ -17,9 +17,39 @@ import (
 	"golang.org/x/text/message"
 )
 
+// mengubah ke format rupiah
 func formatrupiah(price float64) string {
 	formatter := message.NewPrinter(language.Indonesian)
 	return formatter.Sprintf("Rp %.2f", price)
+}
+
+// ngubah ke format rupiah buat price yang di dalam array orderitem
+// TAPI GA DIPAKE DISIMPEN AJA SOALNYA KALI AJA BUTUH HAHAHA
+// func SendFormattedOrder(respw http.ResponseWriter, orders []model.OrderItem) {
+// 	formattedOrders := make([]map[string]interface{}, len(orders))
+// 	for i, item := range orders {
+// 		formattedOrders[i] = map[string]interface{}{
+// 			"menu_name":       item.MenuName,
+// 			"quantity":        item.Quantity,
+// 			"price":           item.Price, 
+// 			"price_formatted": formatrupiah(item.Price), 
+// 		}
+// 	}
+
+// 	at.WriteJSON(respw, http.StatusOK, map[string]interface{}{
+// 		"status": "success",
+// 		"data":   formattedOrders,
+// 	})
+// }
+
+
+// FormatToIndonesianTime - Mengonversi dan memformat waktu ke zona waktu Indonesia
+func FormatToIndonesianTime(t time.Time) (string, error) {
+	loc, err := time.LoadLocation("Asia/Jakarta")
+	if err != nil {
+		return "", err
+	}
+	return t.In(loc).Format("02-01-2006 15:04:05"), nil
 }
 
 // CreateOrder - Membuat order baru
@@ -76,6 +106,15 @@ func CreateOrder(respw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	orderDateInID, err := FormatToIndonesianTime(time.Now())
+if err != nil {
+    at.WriteJSON(respw, http.StatusInternalServerError, model.Response{
+        Status:   "Error: Gagal memformat waktu",
+        Response: err.Error(),
+    })
+    return
+}
+
 	// Membuat order baru berdasarkan data dari frontend
 	newOrder := model.Order{
 		OrderNumber:   order.OrderNumber,
@@ -108,16 +147,16 @@ func CreateOrder(respw http.ResponseWriter, req *http.Request) {
 	// Tambahkan ID yang dihasilkan ke newOrder
 	newOrder.ID = insertResult
 
-	// Format waktu Indonesia
-	loc, _ := time.LoadLocation("Asia/Jakarta")
-	formattedOrderDate := newOrder.OrderDate.In(loc).Format("15:04:05 02-01-2006")
+
 
 	// Membuat response lengkap
 	response := map[string]interface{}{
 		"status":  "success",
 		"message": "Order berhasil dibuat",
+		"formatted_date": orderDateInID, // Tanggal dalam format Indonesia
 		"data":    newOrder,
-		"formatted_date": formattedOrderDate, // Tanggal dalam format Indonesia
+		"total" : formatRupiah(newOrder.Total),
+		
 	}
 
 	// Kirim response ke client
@@ -154,13 +193,24 @@ func GetAllOrder(respw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	var orders []map[string]interface{}
-	for _, order := range data {
+	 // Deklarasi variabel orders
+	 var orders []map[string]interface{}
+
+	 for _, order := range data {
+		 orderDateInID, err := FormatToIndonesianTime(order.OrderDate)
+		 if err != nil {
+			 at.WriteJSON(respw, http.StatusInternalServerError, model.Response{
+				 Status:   "Error: Gagal memformat waktu",
+				 Response: err.Error(),
+			 })
+			 return
+		 }
+
 		orders = append(orders, map[string]interface{}{
 			"id":             order.ID.Hex(),
 			"order_number":   order.OrderNumber,
 			"queue_number":   order.QueueNumber,
-			"order_date":     order.OrderDate.Format("2006-01-02 15:04:05"), // Format Indonesia
+			"order_date":     orderDateInID, // Menggunakan waktu Indonesia
 			"user_id":        order.UserID.Hex(),
 			"user_info": map[string]interface{}{
 				"name":     order.UserInfo.Name,
@@ -176,12 +226,14 @@ func GetAllOrder(respw http.ResponseWriter, req *http.Request) {
 		})
 	}
 
+	// Kirim respons dengan data yang sudah diformat
 	at.WriteJSON(respw, http.StatusOK, map[string]interface{}{
 		"status":  "success",
 		"message": "Data order berhasil diambil",
 		"data":    orders,
 	})
 }
+
 
 // GetOrderByID - Ambil Order Berdasarkan ID
 func GetOrderByID(respw http.ResponseWriter, req *http.Request) {
@@ -225,6 +277,16 @@ func GetOrderByID(respw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	// Format tanggal dan waktu menjadi format Indonesia
+	orderDateInID, err := FormatToIndonesianTime(order.OrderDate)
+	if err != nil {
+		at.WriteJSON(respw, http.StatusInternalServerError, model.Response{
+			Status:   "Error: Gagal memformat waktu",
+			Response: err.Error(),
+		})
+		return
+	}
+
 	// Membuat response untuk data order lengkap
 	response := map[string]interface{}{
 		"status":  "success",
@@ -233,7 +295,7 @@ func GetOrderByID(respw http.ResponseWriter, req *http.Request) {
 			"id":             order.ID.Hex(),
 			"order_number":   order.OrderNumber,
 			"queue_number":   order.QueueNumber,
-			"order_date":     order.OrderDate.Format("2006-01-02 15:04:05"), // Format Indonesia
+			"order_date":     orderDateInID, // Menggunakan waktu Indonesia
 			"user_id":        order.UserID.Hex(),
 			"user_info": map[string]interface{}{
 				"name":     order.UserInfo.Name,
@@ -254,114 +316,118 @@ func GetOrderByID(respw http.ResponseWriter, req *http.Request) {
 }
 
 func UpdateOrder(respw http.ResponseWriter, req *http.Request) {
-    // Decode token untuk mendapatkan payload pengguna
-    payload, err := watoken.Decode(config.PublicKeyWhatsAuth, at.GetLoginFromHeader(req))
-    if err != nil {
-        at.WriteJSON(respw, http.StatusForbidden, map[string]string{"error": "Token tidak valid"})
-        return
-    }
+	// Decode token untuk mendapatkan payload pengguna
+	payload, err := watoken.Decode(config.PublicKeyWhatsAuth, at.GetLoginFromHeader(req))
+	if err != nil {
+		at.WriteJSON(respw, http.StatusForbidden, map[string]string{"error": "Token tidak valid"})
+		return
+	}
 
-    // Ambil ID order dari URL
-    pathParts := strings.Split(req.URL.Path, "/")
-    orderID := pathParts[len(pathParts)-1]
-    if orderID == "" {
-        at.WriteJSON(respw, http.StatusBadRequest, map[string]string{"error": "ID Order tidak ditemukan"})
-        return
-    }
+	// Ambil user dari database menggunakan phonenumber dari payload
+	var user model.Userdomyikado
+	filter := bson.M{"phonenumber": payload.Id}
+	user, err = atdb.GetOneDoc[model.Userdomyikado](config.Mongoconn, "user", filter)
+	if err != nil {
+		at.WriteJSON(respw, http.StatusNotFound, map[string]string{
+			"error": "Data pengguna tidak ditemukan",
+		})
+		return
+	}
 
-    // Konversi ID order ke ObjectID MongoDB
-    objectID, err := primitive.ObjectIDFromHex(orderID)
-    if err != nil {
-        at.WriteJSON(respw, http.StatusBadRequest, map[string]string{"error": "ID Order tidak valid"})
-        return
-    }
+	// Ambil ID order dari URL
+	pathParts := strings.Split(req.URL.Path, "/")
+	orderID := pathParts[len(pathParts)-1]
+	if orderID == "" {
+		at.WriteJSON(respw, http.StatusBadRequest, map[string]string{"error": "ID Order tidak ditemukan"})
+		return
+	}
 
-    // Decode body request ke map
-    var requestBody map[string]interface{}
-    if err := json.NewDecoder(req.Body).Decode(&requestBody); err != nil {
-        at.WriteJSON(respw, http.StatusBadRequest, map[string]string{"error": "Gagal membaca data JSON"})
-        return
-    }
+	// Konversi ID order ke ObjectID MongoDB
+	objectID, err := primitive.ObjectIDFromHex(orderID)
+	if err != nil {
+		at.WriteJSON(respw, http.StatusBadRequest, map[string]string{"error": "ID Order tidak valid"})
+		return
+	}
 
-    // Ambil data pesanan saat ini untuk validasi status
-    currentOrder, err := atdb.GetOneDoc[model.Order](config.Mongoconn, "orders", bson.M{"_id": objectID})
-    if err != nil {
-        at.WriteJSON(respw, http.StatusInternalServerError, map[string]string{"error": "Gagal mengambil data pesanan"})
-        return
-    }
+	// Decode body request ke map
+	var requestBody map[string]interface{}
+	if err := json.NewDecoder(req.Body).Decode(&requestBody); err != nil {
+		at.WriteJSON(respw, http.StatusBadRequest, map[string]string{"error": "Gagal membaca data JSON"})
+		return
+	}
 
-    // Siapkan data untuk update
-    updateData := bson.M{}
+	// Ambil data pesanan saat ini
+	currentOrder, err := atdb.GetOneDoc[model.Order](config.Mongoconn, "orders", bson.M{"_id": objectID})
+	if err != nil {
+		at.WriteJSON(respw, http.StatusInternalServerError, map[string]string{"error": "Gagal mengambil data pesanan"})
+		return
+	}
 
-    // Validasi dan update UserInfo
-    if userInfo, exists := requestBody["user_info"]; exists {
-        if userInfoMap, ok := userInfo.(map[string]interface{}); ok {
-            updateData["user_info"] = userInfoMap
-        }
-    }
+	// Validasi dan update status
+	var updateData bson.M
+	if status, exists := requestBody["status"]; exists {
+		if statusStr, ok := status.(string); ok {
+			switch statusStr {
+			case "diproses", "selesai":
+				updateData = bson.M{"status": statusStr}
+			case "dibatalkan":
+				if currentOrder.Status != "terkirim" {
+					at.WriteJSON(respw, http.StatusBadRequest, map[string]string{
+						"error": "Pesanan tidak dapat dibatalkan karena status saat ini adalah '" + currentOrder.Status + "'",
+					})
+					return
+				}
+				updateData = bson.M{"status": "dibatalkan"}
+			default:
+				at.WriteJSON(respw, http.StatusBadRequest, map[string]string{"error": "Status tidak valid"})
+				return
+			}
+		}
+	} else {
+		at.WriteJSON(respw, http.StatusBadRequest, map[string]string{"error": "Status harus diisi"})
+		return
+	}
 
-    // Validasi dan update Orders
-    if orders, exists := requestBody["orders"]; exists {
-        if ordersArray, ok := orders.([]interface{}); ok {
-            updateData["orders"] = ordersArray
-        }
-    }
+	// Tambahkan informasi siapa yang mengupdate
+	updateData["updated_by"] = user.Name // Menggunakan nama dari struct Userdomyikado
+	updateData["updated_by_role"] = user.Role // Menggunakan role dari struct Userdomyikado
 
-    // Validasi dan update Status
-    if status, exists := requestBody["status"]; exists {
-        if statusStr, ok := status.(string); ok {
-            if statusStr == "diproses" || statusStr == "selesai" {
-                updateData["status"] = statusStr
-            } else if statusStr == "dibatalkan" {
-                // Cek apakah status saat ini memungkinkan pembatalan
-                if currentOrder.Status != "terkirim" {
-                    at.WriteJSON(respw, http.StatusBadRequest, map[string]string{
-                        "error": "Pesanan tidak dapat dibatalkan karena status saat ini adalah '" + currentOrder.Status + "'",
-                    })
-                    return
-                }
-                updateData["status"] = "dibatalkan"
-            }
-        }
-    }
+	// Format waktu Indonesia untuk waktu update
+	updatedTime, err := FormatToIndonesianTime(time.Now())
+	if err != nil {
+		at.WriteJSON(respw, http.StatusInternalServerError, map[string]string{
+			"error": "Gagal memformat waktu",
+		})
+		return
+	}
+	updateData["updated_at"] = updatedTime
 
-    // Pastikan queueNumber tidak diizinkan untuk diubah
-    if _, exists := requestBody["queue_number"]; exists {
-        at.WriteJSON(respw, http.StatusForbidden, map[string]string{
-            "error": "Queue number tidak dapat diubah",
-        })
-        return
-    }
+	// Update data order di database
+	result, err := atdb.UpdateOneDoc(config.Mongoconn, "orders", bson.M{"_id": objectID}, bson.M{"$set": updateData})
+	if err != nil {
+		at.WriteJSON(respw, http.StatusInternalServerError, map[string]string{"error": "Gagal mengupdate order"})
+		return
+	}
 
-    // Pastikan ada data yang diupdate
-    if len(updateData) == 0 {
-        at.WriteJSON(respw, http.StatusBadRequest, map[string]string{"error": "Tidak ada perubahan yang dilakukan"})
-        return
-    }
+	// Periksa apakah ada dokumen yang dimodifikasi
+	if result.ModifiedCount == 0 {
+		at.WriteJSON(respw, http.StatusNotModified, map[string]string{"error": "Tidak ada perubahan yang dilakukan"})
+		return
+	}
 
-    // Update data order di database
-    result, err := atdb.UpdateOneDoc(config.Mongoconn, "orders", bson.M{"_id": objectID}, bson.M{"$set": updateData})
-    if err != nil {
-        at.WriteJSON(respw, http.StatusInternalServerError, map[string]string{"error": "Gagal mengupdate order"})
-        return
-    }
-
-    // Periksa apakah ada dokumen yang dimodifikasi
-    if result.ModifiedCount == 0 {
-        at.WriteJSON(respw, http.StatusNotModified, map[string]string{"error": "Tidak ada perubahan yang dilakukan"})
-        return
-    }
-
-    // Respons sukses
-    at.WriteJSON(respw, http.StatusOK, map[string]interface{}{
-        "status":  "success",
-        "message": "Order berhasil diupdate",
-        "data": map[string]interface{}{
-            "id":            objectID.Hex(),
-            "updatedFields": updateData,
-        },
-        "updatedBy": payload.Alias,
-    })
+	// Respons sukses
+	at.WriteJSON(respw, http.StatusOK, map[string]interface{}{
+		"status":  "success",
+		"message": "Order berhasil diupdate",
+		"data": map[string]interface{}{
+			"id":             objectID.Hex(),
+			"updated_at":     updatedTime,
+			"status":         updateData["status"],
+			"updated_by":     user.Name,
+			"updated_by_role": user.Role,
+			"orders": currentOrder.Orders,
+		},
+	})
 }
 
 func DeleteOrder(respw http.ResponseWriter, req *http.Request) {
