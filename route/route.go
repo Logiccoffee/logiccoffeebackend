@@ -103,13 +103,13 @@ func URL(w http.ResponseWriter, r *http.Request) {
 		controller.PostDataBioUser(w, r)
 		/* 	case method == "POST" && at.URLParam(path, "/data/user/wa/:nomorwa"):
 		controller.PostDataUserFromWA(w, r) */
-		
+
 		// pendaftaran user secara manual
 	case method == "POST" && path == "/auth/register":
 		controller.RegisterUser(w, r)
 	// case method == "POST" && path == "/auth/login":
 	// 	controller.LoginUser(w, r)
-		
+
 	//data proyek
 	case method == "GET" && path == "/data/proyek":
 		controller.GetDataProject(w, r)
@@ -195,15 +195,13 @@ func URL(w http.ResponseWriter, r *http.Request) {
 	case method == "POST" && path == "/auth/resend":
 		controller.ResendPasswordHandler(w, r)
 
-		// middleware
-	// case method == "POST" && at.URLParam(path, "/menu"):
-	// 	checkRoleMiddleware([]string{"user", "dosen"})(menuHandler)(w, r)
-	// case method == "POST" && at.URLParam(path, "/dashboard-admin"):
-	// 	checkRoleMiddleware([]string{"admin"})(adminHandler)(w, r)
-	// case method == "POST" && at.URLParam(path, "/dashboard-cashier"):
-	// 	checkRoleMiddleware([]string{"cashier"})(cashierHandler)(w, r)
-	// default:
-	// 	http.NotFound(w, r)
+	// middleware
+	case method == "POST" && path == "/menu":
+		controller.RoleMiddleware([]string{"user", "dosen"})(controller.MenuHandler)(w, r)
+	case method == "POST" && path == "/dashboard-admin":
+		controller.RoleMiddleware([]string{"admin"})(controller.AdminHandler)(w, r)
+	case method == "POST" && path == "/dashboard-cashier":
+		controller.RoleMiddleware([]string{"cashier"})(controller.CashierHandler)(w, r)
 
 		// Update user role
 	case method == "PUT" && path == "/updateUserRole":
