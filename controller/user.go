@@ -105,7 +105,7 @@ func GetAllDataUsers(respw http.ResponseWriter, req *http.Request) {
 			"id":           user.ID.Hex(),
 			"name":         user.Name,
 			"email":		user.Email,
-			"phone_number": user.PhoneNumber,
+			"phonenumber": user.PhoneNumber,
 			"role":         user.Role,
 		})
 	}

@@ -217,9 +217,9 @@ func GetAllOrder(respw http.ResponseWriter, req *http.Request) {
 
 		orders = append(orders, map[string]interface{}{
 			"id":             order.ID.Hex(),
-			"order_number":   order.OrderNumber,
-			"queue_number":   order.QueueNumber,
-			"order_date":     orderDateInID, // Menggunakan waktu Indonesia
+			"orderNumber":   order.OrderNumber,
+			"queueNumber":   order.QueueNumber,
+			"orderDate":     orderDateInID, // Menggunakan waktu Indonesia
 			"user_id":        order.UserID.Hex(),
 			"user_info": map[string]interface{}{
 				"name":     order.UserInfo.Name,
@@ -302,9 +302,9 @@ func GetOrderByID(respw http.ResponseWriter, req *http.Request) {
 		"message": "Order ditemukan",
 		"data": map[string]interface{}{
 			"id":             order.ID.Hex(),
-			"order_number":   order.OrderNumber,
-			"queue_number":   order.QueueNumber,
-			"order_date":     orderDateInID, // Menggunakan waktu Indonesia
+			"orderNumber":   order.OrderNumber,
+			"queueNumber":   order.QueueNumber,
+			"orderDate":     orderDateInID, // Menggunakan waktu Indonesia
 			"user_id":        order.UserID.Hex(),
 			"user_info": map[string]interface{}{
 				"name":     order.UserInfo.Name,
