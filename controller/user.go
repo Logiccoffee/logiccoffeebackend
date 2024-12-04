@@ -66,42 +66,58 @@ func GetDataUser(respw http.ResponseWriter, req *http.Request) {
 	at.WriteJSON(respw, http.StatusOK, docuser)
 }
 
+// GetAllDataUsers - Ambil Semua Data Pengguna
 func GetAllDataUsers(respw http.ResponseWriter, req *http.Request) {
-	// Decode token untuk memastikan pengguna valid
-	payload, err := watoken.Decode(config.PublicKeyWhatsAuth, at.GetLoginFromHeader(req))
+	// Dekode token WhatsAuth untuk validasi
+	_, err := watoken.Decode(config.PublicKeyWhatsAuth, at.GetLoginFromHeader(req))
 	if err != nil {
-		var respn model.Response
-		respn.Status = "Error : Token Tidak Valid"
-		respn.Info = config.PublicKeyWhatsAuth
-		respn.Location = "Decode Token Error: " + at.GetLoginFromHeader(req)
-		respn.Response = err.Error()
-		at.WriteJSON(respw, http.StatusForbidden, respn)
+		at.WriteJSON(respw, http.StatusForbidden, model.Response{
+			Status:   "Error: Token Tidak Valid",
+			Location: "Decode Token Error",
+			Response: err.Error(),
+		})
 		return
 	}
 
-	// Pastikan role yang mencoba mengambil data adalah admin
-	docuser, err := atdb.GetOneDoc[model.Userdomyikado](config.Mongoconn, "user", primitive.M{"phonenumber": payload.Id})
-	if err != nil || docuser.Role != "admin" {
-		var respn model.Response
-		respn.Status = "Error : Unauthorized"
-		respn.Response = "Hanya admin yang dapat mengakses semua data pengguna"
-		at.WriteJSON(respw, http.StatusUnauthorized, respn)
-		return
-	}
-
-	// Ambil semua data pengguna dari database
-	users, err := atdb.GetAllDoc[model.Userdomyikado](config.Mongoconn, "user", bson.M{})
+	// Ambil semua data pengguna
+	data, err := atdb.GetAllDoc[[]model.Userdomyikado](config.Mongoconn, "user", bson.M{})
 	if err != nil {
-		var respn model.Response
-		respn.Status = "Error : Gagal Mengambil Data"
-		respn.Response = err.Error()
-		at.WriteJSON(respw, http.StatusInternalServerError, respn)
+		at.WriteJSON(respw, http.StatusNotFound, model.Response{
+			Status:   "Error: Data pengguna tidak ditemukan",
+			Response: err.Error(),
+		})
 		return
 	}
 
-	// Kirim data pengguna dalam response
-	at.WriteJSON(respw, http.StatusOK, users)
+	if len(data) == 0 {
+		at.WriteJSON(respw, http.StatusNotFound, model.Response{
+			Status: "Error: Data pengguna kosong",
+		})
+		return
+	}
+
+	// Deklarasi variabel untuk hasil format
+	var users []map[string]interface{}
+
+	// Format data pengguna sebelum dikirim
+	for _, user := range data {
+		users = append(users, map[string]interface{}{
+			"id":           user.ID.Hex(),
+			"name":         user.Name,
+			"email":		user.Email,
+			"phone_number": user.PhoneNumber,
+			"role":         user.Role,
+		})
+	}
+
+	// Kirim respons dengan data yang sudah diformat
+	at.WriteJSON(respw, http.StatusOK, map[string]interface{}{
+		"status":  "success",
+		"message": "Data pengguna berhasil diambil",
+		"data":    users,
+	})
 }
+
 
 
 func UpdateUserRole(w http.ResponseWriter, r *http.Request) {
