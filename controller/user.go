@@ -66,6 +66,44 @@ func GetDataUser(respw http.ResponseWriter, req *http.Request) {
 	at.WriteJSON(respw, http.StatusOK, docuser)
 }
 
+func GetAllDataUsers(respw http.ResponseWriter, req *http.Request) {
+	// Decode token untuk memastikan pengguna valid
+	payload, err := watoken.Decode(config.PublicKeyWhatsAuth, at.GetLoginFromHeader(req))
+	if err != nil {
+		var respn model.Response
+		respn.Status = "Error : Token Tidak Valid"
+		respn.Info = config.PublicKeyWhatsAuth
+		respn.Location = "Decode Token Error: " + at.GetLoginFromHeader(req)
+		respn.Response = err.Error()
+		at.WriteJSON(respw, http.StatusForbidden, respn)
+		return
+	}
+
+	// Pastikan role yang mencoba mengambil data adalah admin
+	docuser, err := atdb.GetOneDoc[model.Userdomyikado](config.Mongoconn, "user", primitive.M{"phonenumber": payload.Id})
+	if err != nil || docuser.Role != "admin" {
+		var respn model.Response
+		respn.Status = "Error : Unauthorized"
+		respn.Response = "Hanya admin yang dapat mengakses semua data pengguna"
+		at.WriteJSON(respw, http.StatusUnauthorized, respn)
+		return
+	}
+
+	// Ambil semua data pengguna dari database
+	users, err := atdb.GetAllDoc[model.Userdomyikado](config.Mongoconn, "user", bson.M{})
+	if err != nil {
+		var respn model.Response
+		respn.Status = "Error : Gagal Mengambil Data"
+		respn.Response = err.Error()
+		at.WriteJSON(respw, http.StatusInternalServerError, respn)
+		return
+	}
+
+	// Kirim data pengguna dalam response
+	at.WriteJSON(respw, http.StatusOK, users)
+}
+
+
 func UpdateUserRole(w http.ResponseWriter, r *http.Request) {
     var request struct {
         Email string `json:"email"`

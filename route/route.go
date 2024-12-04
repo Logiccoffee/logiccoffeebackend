@@ -89,6 +89,8 @@ func URL(w http.ResponseWriter, r *http.Request) {
 	//user data
 	case method == "GET" && path == "/data/user":
 		controller.GetDataUser(w, r)
+	case method == "GET" && path == "/data/users":
+		controller.GetDataUser(w, r)
 
 	//user pendaftaran
 	case method == "POST" && path == "/auth/register/users": //mendapatkan email gmail
