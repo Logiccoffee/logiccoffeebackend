@@ -76,6 +76,7 @@ func AddImageMenu(respw http.ResponseWriter, req *http.Request) {
 		}
 
 		hashedFileName := ghupload.CalculateHash(fileContent) + header.Filename[strings.LastIndex(header.Filename, "."):]
+
 		GitHubAccessToken := config.GHAccessToken
 		GitHubAuthorName := "Rolly Maulana Awangga"
 		GitHubAuthorEmail := "awangga@gmail.com"
@@ -108,11 +109,12 @@ func AddImageMenu(respw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	response := map[string] interface{}{
-		"Status" : "Success",
-		"Message" : "Gambar Berhasil ditambahkan",
-		"Image" : menuImageURL,
+	response := map[string]interface{}{
+		"Status":  "Success",
+		"Message": "Gambar Berhasil ditambahkan",
+		"Image":   menuImageURL,
 	}
 
-	at.WriteJSON(respw, http.StatusInternalServerError, response)
+	at.WriteJSON(respw, http.StatusOK, response)
 }
+

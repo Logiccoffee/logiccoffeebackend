@@ -50,16 +50,7 @@ func CreateMenu(respw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	newMenu := model.Menu{
-		CategoryID:  menu.CategoryID,
-		Name:        menu.Name,
-		Description: menu.Description,
-		Image:       menu.Image,
-		Price:       menu.Price,
-		Status:      menu.Status,
-	}
-
-	insertResult, err := atdb.InsertOneDoc(config.Mongoconn, "menu", newMenu)
+	insertResult, err := atdb.InsertOneDoc(config.Mongoconn, "menu", menu)
 	if err != nil {
 		at.WriteJSON(respw, http.StatusNotModified, model.Response{
 			Status:   "Error: Gagal Insert Database",
@@ -68,19 +59,19 @@ func CreateMenu(respw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	newMenu.ID = insertResult
+	menu.ID = insertResult
 	response := map[string]interface{}{
 		"status":  "success",
 		"message": "Menu berhasil ditambahkan",
 		"user":    payload.Alias,
 		"data": map[string]interface{}{
-			"id":          newMenu.ID.Hex(),
-			"category_id": newMenu.CategoryID.Hex(),
-			"name":        newMenu.Name,
-			"description": newMenu.Description,
-			"image":       newMenu.Image,
-			"price":       formatRupiah(newMenu.Price),
-			"status":      newMenu.Status,
+			"id":          menu.ID.Hex(),
+			"category_id": menu.CategoryID.Hex(),
+			"name":        menu.Name,
+			"description": menu.Description,
+			"image":       menu.Image,
+			"price":       formatRupiah(menu.Price),
+			"status":      menu.Status,
 		},
 	}
 	at.WriteJSON(respw, http.StatusOK, response)
