@@ -26,11 +26,11 @@ func AddImageMenu(respw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	menuID := req.URL.Query().Get("ID")
+	menuID := req.URL.Query().Get("id")
 	if menuID == "" {
 		var respn model.Response
 		respn.Status = "Error : Gagal Mengambil ID"
-		respn.Response = err.Error()
+		respn.Response = "ID tidak ditemukan dalam permintaan"
 		at.WriteJSON(respw, http.StatusBadRequest, respn)
 		return
 	}
