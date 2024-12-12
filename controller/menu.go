@@ -1,6 +1,7 @@
 package controller
 
 import (
+    "io"
 	"encoding/json"
 	"net/http"
 	"strings"
@@ -14,6 +15,7 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"golang.org/x/text/language"
 	"golang.org/x/text/message"
+    "github.com/gocroot/helper/ghupload"
 )
 
 func formatRupiah(price float64) string {
@@ -23,6 +25,7 @@ func formatRupiah(price float64) string {
 
 // CreateMenu - Tambah Menu Baru
 func CreateMenu(respw http.ResponseWriter, req *http.Request) {
+	// Dekode token dari header
 	payload, err := watoken.Decode(config.PublicKeyWhatsAuth, at.GetLoginFromHeader(req))
 	if err != nil {
 		at.WriteJSON(respw, http.StatusForbidden, model.Response{
@@ -33,7 +36,52 @@ func CreateMenu(respw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	// Parsing form data
+	err = req.ParseMultipartForm(10 << 20)
+	if err != nil {
+		at.WriteJSON(respw, http.StatusBadRequest, model.Response{
+			Status:   "Error: Gagal memproses form data",
+			Response: err.Error(),
+		})
+		return
+	}
+
 	var menu model.Menu
+	// Mengambil file gambar dari form
+	file, header, err := req.FormFile("menuImage")
+	if err == nil {
+		defer file.Close()
+		fileContent, err := io.ReadAll(file)
+		if err != nil {
+			at.WriteJSON(respw, http.StatusInternalServerError, model.Response{
+				Status:   "Error: Gagal membaca file",
+				Response: err.Error(),
+			})
+			return
+		}
+
+		hashedFileName := ghupload.CalculateHash(fileContent) + header.Filename[strings.LastIndex(header.Filename, "."):]
+		GitHubAccessToken := config.GHAccessToken
+		GitHubAuthorName := "Rolly Maulana Awangga"
+		GitHubAuthorEmail := "awangga@gmail.com"
+		githubOrg := "logiccoffee"
+		githubRepo := "img"
+		pathFile := "menuImages/" + hashedFileName
+		replace := true
+
+		content, _, err := ghupload.GithubUpload(GitHubAccessToken, GitHubAuthorName, GitHubAuthorEmail, fileContent, githubOrg, githubRepo, pathFile, replace)
+		if err != nil {
+			at.WriteJSON(respw, http.StatusInternalServerError, model.Response{
+				Status:   "Error: Gagal mengupload gambar ke GitHub",
+				Response: err.Error(),
+			})
+			return
+		}
+
+		menu.Image = *content.Content.HTMLURL
+	}
+
+	// Decode JSON body into menu struct
 	if err := json.NewDecoder(req.Body).Decode(&menu); err != nil {
 		at.WriteJSON(respw, http.StatusBadRequest, model.Response{
 			Status:   "Error: Bad Request",
@@ -42,6 +90,7 @@ func CreateMenu(respw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	// Validasi status menu
 	if menu.Status != "Tersedia" && menu.Status != "Tidak Tersedia" {
 		at.WriteJSON(respw, http.StatusBadRequest, model.Response{
 			Status:   "Error: Status Tidak Valid",
@@ -50,6 +99,7 @@ func CreateMenu(respw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	// Insert data menu ke database
 	insertResult, err := atdb.InsertOneDoc(config.Mongoconn, "menu", menu)
 	if err != nil {
 		at.WriteJSON(respw, http.StatusNotModified, model.Response{
