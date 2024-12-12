@@ -230,8 +230,8 @@ func URL(w http.ResponseWriter, r *http.Request) {
 		controller.UpdateMenu(w, r)
 	case method == "DELETE" && at.URLParam(path, "/data/menu/:id"):
 		controller.DeleteMenu(w, r)
-	case method == "PUT" && at.URLParam(path, "/data/menu/image/"):
-		controller.AddImageMenu(w, r)
+	// case method == "PUT" && at.URLParam(path, "/data/menu/image/"):
+	// 	controller.AddImageMenu(w, r)
 
 		// Order routes
 	case method == "GET" && path == "/data/order":
