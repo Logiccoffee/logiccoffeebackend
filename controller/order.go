@@ -44,6 +44,14 @@ func formatrupiah(price float64) string {
 // 	})
 // }
 
+// FormatToIndonesianTime - Mengonversi dan memformat waktu ke zona waktu Indonesia
+func FormatToIndonesianTime(t time.Time) (string, error) {
+	loc, err := time.LoadLocation("Asia/Jakarta")
+	if err != nil {
+		return "", err
+	}
+	return t.In(loc).Format("02-01-2006 15:04:05"), nil
+}
 
 // ini buat generate ordernumber sama orderqueue
 // Mutex untuk menghindari race condition saat mengakses nomor antrean
@@ -54,21 +62,7 @@ var dailyQueueNumber int
 var lastQueueDate string
 
 // GenerateOrderNumber - Menghasilkan nomor order baru
-func GenerateOrderNumber() string {
-	// Mengambil waktu sekarang
-	currentTime := time.Now()
-
-	// Mengambil nomor antrean unik harian
-	queueNumber := getDailyQueueNumber()
-
-	// Membuat nomor order dengan format: LGCYYYYMMDDHHMMSS + queueNumber
-	orderNumber := fmt.Sprintf("LGC%s%03d", currentTime.Format("20060102150405"), queueNumber)
-
-	return orderNumber
-}
-
-// getDailyQueueNumber - Menghasilkan nomor antrean unik harian (1-500)
-func getDailyQueueNumber() int {
+func GenerateOrderNumber() (string, int) {
 	queueMutex.Lock()
 	defer queueMutex.Unlock()
 
@@ -89,17 +83,13 @@ func getDailyQueueNumber() int {
 		dailyQueueNumber = 1
 	}
 
-	return dailyQueueNumber
-}
-// ini batasnya
+	// Mengambil waktu sekarang
+	currentTime := time.Now()
 
-// FormatToIndonesianTime - Mengonversi dan memformat waktu ke zona waktu Indonesia
-func FormatToIndonesianTime(t time.Time) (string, error) {
-	loc, err := time.LoadLocation("Asia/Jakarta")
-	if err != nil {
-		return "", err
-	}
-	return t.In(loc).Format("02-01-2006 15:04:05"), nil
+	// Membuat nomor order dengan format: LGCYYYYMMDDHHMMSS + queueNumber
+	orderNumber := fmt.Sprintf("LGC%s%03d", currentTime.Format("20060102150405"), dailyQueueNumber)
+
+	return orderNumber, dailyQueueNumber
 }
 
 // CreateOrder - Membuat order baru
@@ -178,8 +168,7 @@ func CreateOrder(respw http.ResponseWriter, req *http.Request) {
 	}
 
 	// Menghasilkan OrderNumber dan QueueNumber
-	OrderNumber := GenerateOrderNumber()
-	QueueNumber := getDailyQueueNumber()
+	OrderNumber, QueueNumber := GenerateOrderNumber()
 
 	// Membuat order baru berdasarkan data dari frontend
 	newOrder := model.Order{
