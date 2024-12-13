@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"time"
 	"strings"
+	"sync"
+	"fmt"
 
 	"github.com/gocroot/config"
 	"github.com/gocroot/helper/at"
@@ -42,6 +44,54 @@ func formatrupiah(price float64) string {
 // 	})
 // }
 
+
+// ini buat generate ordernumber sama orderqueue
+// Mutex untuk menghindari race condition saat mengakses nomor antrean
+var queueMutex sync.Mutex
+
+// Variabel untuk menyimpan antrean dan tanggal terakhir
+var dailyQueueNumber int
+var lastQueueDate string
+
+// GenerateOrderNumber - Menghasilkan nomor order baru
+func GenerateOrderNumber() string {
+	// Mengambil waktu sekarang
+	currentTime := time.Now()
+
+	// Mengambil nomor antrean unik harian
+	queueNumber := getDailyQueueNumber()
+
+	// Membuat nomor order dengan format: LGCYYYYMMDDHHMMSS + queueNumber
+	orderNumber := fmt.Sprintf("LGC%s%03d", currentTime.Format("20060102150405"), queueNumber)
+
+	return orderNumber
+}
+
+// getDailyQueueNumber - Menghasilkan nomor antrean unik harian (1-500)
+func getDailyQueueNumber() int {
+	queueMutex.Lock()
+	defer queueMutex.Unlock()
+
+	// Mendapatkan tanggal hari ini
+	currentDate := time.Now().Format("20060102")
+
+	// Jika tanggal berubah, reset antrean
+	if currentDate != lastQueueDate {
+		lastQueueDate = currentDate
+		dailyQueueNumber = 0
+	}
+
+	// Increment antrean
+	dailyQueueNumber++
+
+	// Batas maksimum antrean
+	if dailyQueueNumber > 500 {
+		dailyQueueNumber = 1
+	}
+
+	return dailyQueueNumber
+}
+// ini batasnya
 
 // FormatToIndonesianTime - Mengonversi dan memformat waktu ke zona waktu Indonesia
 func FormatToIndonesianTime(t time.Time) (string, error) {
@@ -127,10 +177,14 @@ func CreateOrder(respw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	// Menghasilkan OrderNumber dan QueueNumber
+	OrderNumber := GenerateOrderNumber()
+	QueueNumber := getDailyQueueNumber()
+
 	// Membuat order baru berdasarkan data dari frontend
 	newOrder := model.Order{
-		OrderNumber:   order.OrderNumber,
-		QueueNumber:   order.QueueNumber,
+		OrderNumber:   OrderNumber,
+		QueueNumber:   QueueNumber,
 		OrderDate:     currentTimeInID, // Gunakan waktu Indonesia
 		UserID:        user.ID,         // UserID hanya untuk referensi
 		UserInfo: model.UserInfo{
