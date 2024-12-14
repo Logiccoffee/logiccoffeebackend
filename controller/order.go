@@ -367,6 +367,100 @@ func GetOrderByID(respw http.ResponseWriter, req *http.Request) {
 	at.WriteJSON(respw, http.StatusOK, response)
 }
 
+// GetOrdersByUserID - Ambil data order berdasarkan user_id
+func GetOrdersByUserID(respw http.ResponseWriter, req *http.Request) {
+	// Dekode token WhatsAuth untuk validasi
+	_, err := watoken.Decode(config.PublicKeyWhatsAuth, at.GetLoginFromHeader(req))
+	if err != nil {
+		at.WriteJSON(respw, http.StatusForbidden, model.Response{
+			Status:   "Error: Token Tidak Valid",
+			Location: "Decode Token Error",
+			Response: err.Error(),
+		})
+		return
+	}
+
+	// Ambil user_id dari parameter query
+	userID := req.URL.Query().Get("user_id")
+	if userID == "" {
+		at.WriteJSON(respw, http.StatusBadRequest, model.Response{
+			Status:   "Error: Bad Request",
+			Response: "Parameter user_id diperlukan",
+		})
+		return
+	}
+
+	// Konversi user_id ke ObjectID
+	userObjectID, err := primitive.ObjectIDFromHex(userID)
+	if err != nil {
+		at.WriteJSON(respw, http.StatusBadRequest, model.Response{
+			Status:   "Error: Bad Request",
+			Response: "user_id tidak valid",
+		})
+		return
+	}
+
+	// Filter untuk mencari order berdasarkan user_id
+	filter := bson.M{"user_id": userObjectID}
+
+	// Ambil data order yang sesuai filter
+	data, err := atdb.GetAllDoc[[]model.Order](config.Mongoconn, "orders", filter)
+	if err != nil {
+		at.WriteJSON(respw, http.StatusNotFound, model.Response{
+			Status:   "Error: Data order tidak ditemukan",
+			Response: err.Error(),
+		})
+		return
+	}
+
+	if len(data) == 0 {
+		at.WriteJSON(respw, http.StatusNotFound, model.Response{
+			Status: "Error: Tidak ada data order untuk user ini",
+		})
+		return
+	}
+
+	// Deklarasi variabel orders
+	var orders []map[string]interface{}
+
+	for _, order := range data {
+		orderDateInID, err := FormatToIndonesianTime(order.OrderDate)
+		if err != nil {
+			at.WriteJSON(respw, http.StatusInternalServerError, model.Response{
+				Status:   "Error: Gagal memformat waktu",
+				Response: err.Error(),
+			})
+			return
+		}
+
+		orders = append(orders, map[string]interface{}{
+			"id":             order.ID.Hex(),
+			"orderNumber":    order.OrderNumber,
+			"queueNumber":    order.QueueNumber,
+			"orderDate":      orderDateInID, // Menggunakan waktu Indonesia
+			"user_id":        order.UserID.Hex(),
+			"user_info": map[string]interface{}{
+				"name":     order.UserInfo.Name,
+				"whatsapp": order.UserInfo.Whatsapp,
+				"note":     order.UserInfo.Note,
+			},
+			"orders":          order.Orders,
+			"total":           formatrupiah(order.Total),
+			"payment_method":  order.PaymentMethod,
+			"status":          order.Status,
+			"created_by":      order.CreatedBy,
+			"created_by_role": order.CreatedByRole,
+		})
+	}
+
+	// Kirim respons dengan data yang sudah diformat
+	at.WriteJSON(respw, http.StatusOK, map[string]interface{}{
+		"status":  "success",
+		"message": "Data order berhasil diambil",
+		"data":    orders,
+	})
+}
+
 func UpdateOrder(respw http.ResponseWriter, req *http.Request) {
 	// Decode token untuk mendapatkan payload pengguna
 	payload, err := watoken.Decode(config.PublicKeyWhatsAuth, at.GetLoginFromHeader(req))
