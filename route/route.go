@@ -241,7 +241,7 @@ func URL(w http.ResponseWriter, r *http.Request) {
 	case method == "GET" && at.URLParam(path, "/data/order/:id"):
 		controller.GetOrderByID(w, r)
 	case method == "GET" && at.URLParam(path, "/data/orders/user/:user_id"):
-		controller.GetOrdersByUserID(w, r)	
+		controller.GetOrderByUserID(w, r)	
 	case method == "POST" && path == "/data/order":
 		controller.CreateOrder(w, r)
 	case method == "PUT" && at.URLParam(path, "/data/order/:id"):
