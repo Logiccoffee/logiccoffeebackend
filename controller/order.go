@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 	"fmt"
+	"log"
 
 	"github.com/gocroot/config"
 	"github.com/gocroot/helper/at"
@@ -367,11 +368,13 @@ func GetOrderByID(respw http.ResponseWriter, req *http.Request) {
 	at.WriteJSON(respw, http.StatusOK, response)
 }
 
-// GetOrderByUserID - Ambil Order Berdasarkan user_id
 func GetOrderByUserID(respw http.ResponseWriter, req *http.Request) {
-    // Dekode token WhatsAuth untuk validasi
+    log.Println("Memulai fungsi GetOrderByUserID")
+
+    // Decode token
     _, err := watoken.Decode(config.PublicKeyWhatsAuth, at.GetLoginFromHeader(req))
     if err != nil {
+        log.Println("Error Decode Token:", err)
         at.WriteJSON(respw, http.StatusForbidden, model.Response{
             Status:   "Error: Token Tidak Valid",
             Location: "Decode Token Error",
@@ -382,9 +385,11 @@ func GetOrderByUserID(respw http.ResponseWriter, req *http.Request) {
 
     // Ambil user_id dari URL
     pathParts := strings.Split(req.URL.Path, "/")
-    userID := pathParts[len(pathParts)-2] // assuming URL pattern is /data/order/user/:user_id
+    userID := pathParts[len(pathParts)-1]
+    log.Println("userID dari URL:", userID)
 
     if userID == "" {
+        log.Println("Error: user_id tidak ditemukan")
         at.WriteJSON(respw, http.StatusBadRequest, model.Response{
             Status: "Error: user_id tidak ditemukan di URL",
         })
@@ -394,74 +399,37 @@ func GetOrderByUserID(respw http.ResponseWriter, req *http.Request) {
     // Ubah user_id string menjadi ObjectID
     objectID, err := primitive.ObjectIDFromHex(userID)
     if err != nil {
+        log.Println("Error: user_id tidak valid -", err)
         at.WriteJSON(respw, http.StatusBadRequest, model.Response{
             Status: "Error: user_id tidak valid",
         })
         return
     }
+    log.Println("ObjectID hasil konversi:", objectID)
 
-    // Ambil semua data order
+    // Query MongoDB
     data, err := atdb.GetAllDoc[[]model.Order](config.Mongoconn, "orders", bson.M{"user_id": objectID})
     if err != nil {
+        log.Println("Error: Data order tidak ditemukan -", err)
         at.WriteJSON(respw, http.StatusNotFound, model.Response{
             Status:   "Error: Data order tidak ditemukan",
             Response: err.Error(),
         })
         return
     }
+    log.Println("Data order ditemukan:", data)
 
     if len(data) == 0 {
+        log.Println("Error: Data order kosong")
         at.WriteJSON(respw, http.StatusNotFound, model.Response{
             Status: "Error: Data order kosong",
         })
         return
     }
 
-    // Deklarasi variabel orders
-    var orders []map[string]interface{}
-
-    for _, order := range data {
-        if order.UserID.Hex() != userID {
-            continue
-        }
-
-        // Format tanggal dan waktu menjadi format Indonesia
-        orderDateInID, err := FormatToIndonesianTime(order.OrderDate)
-        if err != nil {
-            at.WriteJSON(respw, http.StatusInternalServerError, model.Response{
-                Status:   "Error: Gagal memformat waktu",
-                Response: err.Error(),
-            })
-            return
-        }
-
-        orders = append(orders, map[string]interface{}{
-            "id":             order.ID.Hex(),
-            "orderNumber":   order.OrderNumber,
-            "queueNumber":   order.QueueNumber,
-            "orderDate":     orderDateInID, // Menggunakan waktu Indonesia
-            "user_id":        order.UserID.Hex(),
-            "user_info": map[string]interface{}{
-                "name":     order.UserInfo.Name,
-                "whatsapp": order.UserInfo.Whatsapp,
-                "note":     order.UserInfo.Note,
-            },
-            "orders":          order.Orders,
-            "total":           formatrupiah(order.Total),
-            "payment_method":  order.PaymentMethod,
-            "status":          order.Status,
-            "created_by":      order.CreatedBy,
-            "created_by_role": order.CreatedByRole,
-        })
-    }
-
-    // Kirim respons dengan data yang sudah diformat
-    at.WriteJSON(respw, http.StatusOK, map[string]interface{}{
-        "status":  "success",
-        "message": "Data order berhasil diambil",
-        "data":    orders,
-    })
+    log.Println("Fungsi GetOrderByUserID selesai sukses")
 }
+
 
 func UpdateOrder(respw http.ResponseWriter, req *http.Request) {
 	// Decode token untuk mendapatkan payload pengguna
