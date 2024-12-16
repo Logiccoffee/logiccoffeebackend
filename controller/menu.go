@@ -298,20 +298,40 @@ func UpdateMenu(respw http.ResponseWriter, req *http.Request) {
 	// Menyiapkan data untuk update (langsung menggantikan field yang diberikan)
 	updateData := bson.M{}
 	if name, exists := requestBody["name"]; exists && name != "" {
+		if len(name.(string)) > 100 {
+			var respn model.Response
+			respn.Status = "Error: Nama tidak boleh lebih dari 100 karakter."
+			at.WriteJSON(respw, http.StatusBadRequest, respn)
+			return
+		}
 		updateData["name"] = name
-	}
+	}	
 	if description, exists := requestBody["description"]; exists && description != "" {
 		updateData["description"] = description
 	}
-	if image, exists := requestBody["image"]; exists && image != "" {
-		updateData["image"] = image
-	}
 	if price, exists := requestBody["price"]; exists {
+		if _, ok := price.(float64); !ok {
+			var respn model.Response
+			respn.Status = "Error: Harga harus berupa angka"
+			at.WriteJSON(respw, http.StatusBadRequest, respn)
+			return
+		}
 		updateData["price"] = price
-	}
+	}	
 	if status, exists := requestBody["status"]; exists && status != "" {
+		validStatuses := map[string]bool{
+			"tersedia":      true,
+			"tidak tersedia": true,
+			"habis":         true,
+		}
+		if _, valid := validStatuses[status.(string)]; !valid {
+			var respn model.Response
+			respn.Status = "Error: Status tidak valid. Hanya 'tersedia', 'tidak tersedia', atau 'habis' yang diperbolehkan."
+			at.WriteJSON(respw, http.StatusBadRequest, respn)
+			return
+		}
 		updateData["status"] = status
-	}
+	}	
 	if categoryID, exists := requestBody["category_id"]; exists && categoryID != "" {
 		catObjectID, err := primitive.ObjectIDFromHex(categoryID.(string))
 		if err != nil {
@@ -323,7 +343,61 @@ func UpdateMenu(respw http.ResponseWriter, req *http.Request) {
 		}
 		updateData["category_id"] = catObjectID
 	}
+	// Handle file upload if "menuImage" is provided in request
+if file, header, err := req.FormFile("menuImage"); err == nil {
+	defer file.Close()
 
+	// Baca konten file terlebih dahulu
+	fileContent, err := io.ReadAll(file)
+	if err != nil {
+		var respn model.Response
+		respn.Status = "Error: Gagal Membaca File Gambar"
+		respn.Response = err.Error()
+		at.WriteJSON(respw, http.StatusInternalServerError, respn)
+		return
+	}
+
+	// Validasi tipe file berdasarkan ekstensi
+	if !strings.HasSuffix(strings.ToLower(header.Filename), ".jpg") && 
+	   !strings.HasSuffix(strings.ToLower(header.Filename), ".png") {
+		var respn model.Response
+		respn.Status = "Error: File gambar harus berupa JPG atau PNG."
+		at.WriteJSON(respw, http.StatusBadRequest, respn)
+		return
+	}
+
+	// Validasi ukuran file
+	if len(fileContent) > 2*1024*1024 { // 2 MB
+		var respn model.Response
+		respn.Status = "Error: Ukuran file gambar tidak boleh lebih dari 2 MB."
+		at.WriteJSON(respw, http.StatusBadRequest, respn)
+		return
+	}
+
+	// Proses upload gambar ke GitHub
+	hashedFileName := ghupload.CalculateHash(fileContent) + header.Filename[strings.LastIndex(header.Filename, "."):]
+	pathFile := "menuImages/" + hashedFileName
+	content, _, err := ghupload.GithubUpload(
+		config.GHAccessToken,
+		"Audyardha Nasywa Andini",
+		"audyardhaandini@gmail.com",
+		fileContent,
+		"logiccoffee",
+		"img",
+		pathFile,
+		true,
+	)
+	if err != nil {
+		var respn model.Response
+		respn.Status = "Error: Gagal Mengupload Gambar Ke GitHub"
+		respn.Response = err.Error()
+		at.WriteJSON(respw, http.StatusInternalServerError, respn)
+		return
+	}
+
+	// Simpan URL gambar ke data update
+	updateData["image"] = *content.Content.HTMLURL
+}
 	// Jika tidak ada perubahan data, beri respon error
 	if len(updateData) == 0 {
 		var respn model.Response
