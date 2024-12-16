@@ -349,11 +349,12 @@ func UpdateMenu(respw http.ResponseWriter, req *http.Request) {
 	}
 	// Handle file upload if "menuImage" is provided in request
 	// ini buat handle file upload ke menuImage gitu pokoknya
-	if file, header, err := req.FormFile("menuImage"); err == nil {
-		defer file.Close()
+	menuImage, header, err := req.FormFile("menuImage")
+	if err == nil {
+		defer menuImage.Close()
 
 		// Baca konten file terlebih dahulu
-		fileContent, err := io.ReadAll(file)
+		fileContent, err := io.ReadAll(menuImage)
 		if err != nil {
 			var respn model.Response
 			respn.Status = "Error: Gagal Membaca File Gambar"
@@ -441,6 +442,7 @@ func UpdateMenu(respw http.ResponseWriter, req *http.Request) {
 	}
 	at.WriteJSON(respw, http.StatusOK, response)
 }
+
 
 func DeleteMenu(respw http.ResponseWriter, req *http.Request) {
 	// Ambil token dari header
