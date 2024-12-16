@@ -136,6 +136,22 @@ func GetOneDoc[T any](db *mongo.Database, collection string, filter bson.M) (doc
 	return
 }
 
+func GetManyDocs[T any](db *mongo.Database, collection string, filter bson.M) ([]T, error) {
+	ctx := context.TODO()
+	cur, err := db.Collection(collection).Find(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	defer cur.Close(ctx)
+
+	var docs []T
+	if err = cur.All(ctx, &docs); err != nil {
+		return nil, err
+	}
+	return docs, nil
+}
+
+
 // Fungsi untuk menghapus koleksi lmsusers
 func DropCollection(db *mongo.Database, collection string) error {
 	return db.Collection(collection).Drop(context.TODO())
