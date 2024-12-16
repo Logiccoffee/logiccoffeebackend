@@ -78,8 +78,8 @@ func AddImageMenu(respw http.ResponseWriter, req *http.Request) {
 		hashedFileName := ghupload.CalculateHash(fileContent) + header.Filename[strings.LastIndex(header.Filename, "."):]
 
 		GitHubAccessToken := config.GHAccessToken
-		GitHubAuthorName := "Rolly Maulana Awangga"
-		GitHubAuthorEmail := "awangga@gmail.com"
+		GitHubAuthorName := "Audyardha Nasywa Andini"
+		GitHubAuthorEmail := "audyardhaandini@gmail.com"
 		githubOrg := "logiccoffee"
 		githubRepo := "img"
 		pathFile := "menuImages/" + hashedFileName
@@ -117,4 +117,3 @@ func AddImageMenu(respw http.ResponseWriter, req *http.Request) {
 
 	at.WriteJSON(respw, http.StatusOK, response)
 }
-

@@ -150,8 +150,8 @@ func CreateMenuWithImage(respw http.ResponseWriter, req *http.Request) {
 		pathFile := "menuImages/" + hashedFileName
 		content, _, err := ghupload.GithubUpload(
 			config.GHAccessToken,
-			"Rolly Maulana Awangga",
-			"awangga@gmail.com",
+			"Audyardha Nasywa Andini",
+			"audyardhaandini@gmail.com",
 			fileContent,
 			"logiccoffee",
 			"img",
