@@ -7,7 +7,6 @@ import (
 	"strings"
 	"sync"
 	"fmt"
-	"log"
 
 	"github.com/gocroot/config"
 	"github.com/gocroot/helper/at"
@@ -369,66 +368,47 @@ func GetOrderByID(respw http.ResponseWriter, req *http.Request) {
 }
 
 func GetOrderByUserID(respw http.ResponseWriter, req *http.Request) {
-    log.Println("Memulai fungsi GetOrderByUserID")
-
-    // Decode token
-    _, err := watoken.Decode(config.PublicKeyWhatsAuth, at.GetLoginFromHeader(req))
+    // 1. Decode token untuk mendapatkan phonenumber
+    payload, err := watoken.Decode(config.PublicKeyWhatsAuth, at.GetLoginFromHeader(req))
     if err != nil {
-        log.Println("Error Decode Token:", err)
-        at.WriteJSON(respw, http.StatusForbidden, model.Response{
-            Status:   "Error: Token Tidak Valid",
-            Location: "Decode Token Error",
-            Response: err.Error(),
-        })
+        var respn model.Response
+        respn.Status = "Error : Token Tidak Valid"
+        respn.Info = config.PublicKeyWhatsAuth
+        respn.Location = "Decode Token Error: " + at.GetLoginFromHeader(req)
+        respn.Response = err.Error()
+        at.WriteJSON(respw, http.StatusForbidden, respn)
         return
     }
 
-    // Ambil user_id dari URL
-    pathParts := strings.Split(req.URL.Path, "/")
-    userID := pathParts[len(pathParts)-1]
-    log.Println("userID dari URL:", userID)
-
-    if userID == "" {
-        log.Println("Error: user_id tidak ditemukan")
-        at.WriteJSON(respw, http.StatusBadRequest, model.Response{
-            Status: "Error: user_id tidak ditemukan di URL",
-        })
-        return
-    }
-
-    // Ubah user_id string menjadi ObjectID
-    objectID, err := primitive.ObjectIDFromHex(userID)
+    // 2. Cari user di database berdasarkan phonenumber dari token
+    docuser, err := atdb.GetOneDoc[model.Userdomyikado](config.Mongoconn, "users", primitive.M{"phonenumber": payload.Id})
     if err != nil {
-        log.Println("Error: user_id tidak valid -", err)
-        at.WriteJSON(respw, http.StatusBadRequest, model.Response{
-            Status: "Error: user_id tidak valid",
-        })
+        var respn model.Response
+        respn.Status = "Error: User tidak ditemukan"
+        respn.Info = "Phonenumber tidak cocok"
+        respn.Response = err.Error()
+        at.WriteJSON(respw, http.StatusNotFound, respn)
         return
     }
-    log.Println("ObjectID hasil konversi:", objectID)
 
-    // Query MongoDB
-    data, err := atdb.GetAllDoc[[]model.Order](config.Mongoconn, "orders", bson.M{"user_id": objectID})
+    // 3. Ambil _id user dari dokumen user yang ditemukan
+    userID := docuser.ID
+
+    // 4. Cari orders yang terkait dengan user_id di collection orders
+    orders, err := atdb.GetManyDocs[model.Order](config.Mongoconn, "orders", primitive.M{"user_id": userID})
     if err != nil {
-        log.Println("Error: Data order tidak ditemukan -", err)
-        at.WriteJSON(respw, http.StatusNotFound, model.Response{
-            Status:   "Error: Data order tidak ditemukan",
-            Response: err.Error(),
-        })
-        return
-    }
-    log.Println("Data order ditemukan:", data)
-
-    if len(data) == 0 {
-        log.Println("Error: Data order kosong")
-        at.WriteJSON(respw, http.StatusNotFound, model.Response{
-            Status: "Error: Data order kosong",
-        })
+        var respn model.Response
+        respn.Status = "Error: Tidak dapat mengambil data pesanan"
+        respn.Response = err.Error()
+        at.WriteJSON(respw, http.StatusInternalServerError, respn)
         return
     }
 
-    log.Println("Fungsi GetOrderByUserID selesai sukses")
+    // 5. Kembalikan data pesanan ke client
+    at.WriteJSON(respw, http.StatusOK, orders)
 }
+
+
 
 
 func UpdateOrder(respw http.ResponseWriter, req *http.Request) {
