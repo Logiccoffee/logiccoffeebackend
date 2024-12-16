@@ -226,14 +226,10 @@ func URL(w http.ResponseWriter, r *http.Request) {
 		controller.GetMenuByID(w, r)
 	case method == "POST" && path == "/data/menu":
 		controller.CreateMenu(w, r)
-	case method == "POST" && path == "/data/menuImage":
-		controller.CreateMenuWithImage(w, r)
 	case method == "PUT" && at.URLParam(path, "/data/menu/:id"):
 		controller.UpdateMenu(w, r)
 	case method == "DELETE" && at.URLParam(path, "/data/menu/:id"):
 		controller.DeleteMenu(w, r)
-	case method == "PUT" && at.URLParam(path, "/data/menu/image/"):
-		controller.AddImageMenu(w, r)
 
 		// Order routes
 	case method == "GET" && path == "/data/order":

@@ -24,68 +24,8 @@ func formatRupiah(price float64) string {
 	return formatter.Sprintf("Rp %.2f", price)
 }
 
-// CreateMenu - Tambah Menu Baru
-func CreateMenu(respw http.ResponseWriter, req *http.Request) {
-	payload, err := watoken.Decode(config.PublicKeyWhatsAuth, at.GetLoginFromHeader(req))
-	if err != nil {
-		at.WriteJSON(respw, http.StatusForbidden, model.Response{
-			Status:   "Error: Token Tidak Valid",
-			Location: "Decode Token Error",
-			Response: err.Error(),
-		})
-		return
-	}
-	var menu model.Menu
-	if err := json.NewDecoder(req.Body).Decode(&menu); err != nil {
-		at.WriteJSON(respw, http.StatusBadRequest, model.Response{
-			Status:   "Error: Bad Request",
-			Response: err.Error(),
-		})
-		return
-	}
-	if menu.Status != "Tersedia" && menu.Status != "Tidak Tersedia" {
-		at.WriteJSON(respw, http.StatusBadRequest, model.Response{
-			Status:   "Error: Status Tidak Valid",
-			Response: "Status harus 'Tersedia' atau 'Tidak Tersedia'",
-		})
-		return
-	}
-	newMenu := model.Menu{
-		CategoryID:  menu.CategoryID,
-		Name:        menu.Name,
-		Description: menu.Description,
-		Image:       menu.Image,
-		Price:       menu.Price,
-		Status:      menu.Status,
-	}
-	insertResult, err := atdb.InsertOneDoc(config.Mongoconn, "menu", newMenu)
-	if err != nil {
-		at.WriteJSON(respw, http.StatusNotModified, model.Response{
-			Status:   "Error: Gagal Insert Database",
-			Response: err.Error(),
-		})
-		return
-	}
-	newMenu.ID = insertResult
-	response := map[string]interface{}{
-		"status":  "success",
-		"message": "Menu berhasil ditambahkan",
-		"user":    payload.Alias,
-		"data": map[string]interface{}{
-			"id":          newMenu.ID.Hex(),
-			"category_id": newMenu.CategoryID.Hex(),
-			"name":        newMenu.Name,
-			"description": newMenu.Description,
-			"image":       newMenu.Image,
-			"price":       formatRupiah(newMenu.Price),
-			"status":      newMenu.Status,
-		},
-	}
-	at.WriteJSON(respw, http.StatusOK, response)
-}
-
 // upload menu sekalian sama fotonya.
-func CreateMenuWithImage(respw http.ResponseWriter, req *http.Request) {
+func CreateMenu(respw http.ResponseWriter, req *http.Request) {
 	payload, err := watoken.Decode(config.PublicKeyWhatsAuth, at.GetLoginFromHeader(req))
 	if err != nil {
 		at.WriteJSON(respw, http.StatusForbidden, model.Response{
