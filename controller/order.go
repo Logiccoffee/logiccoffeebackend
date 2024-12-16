@@ -381,15 +381,13 @@ func GetOrderByUserID(respw http.ResponseWriter, req *http.Request) {
     }
 
     // 2. Cari user di database berdasarkan phonenumber dari token
-    docuser, err := atdb.GetOneDoc[model.Userdomyikado](config.Mongoconn, "users", primitive.M{"phonenumber": payload.Id})
-    if err != nil {
-        var respn model.Response
-        respn.Status = "Error: User tidak ditemukan"
-        respn.Info = "Phonenumber tidak cocok"
-        respn.Response = err.Error()
-        at.WriteJSON(respw, http.StatusNotFound, respn)
-        return
-    }
+    docuser, err := atdb.GetOneDoc[model.Userdomyikado](config.Mongoconn, "user", primitive.M{"phonenumber": payload.Id})
+	if err != nil {
+		docuser.PhoneNumber = payload.Id
+		docuser.Name = payload.Alias
+		at.WriteJSON(respw, http.StatusNotFound, docuser)
+		return
+	}
 
     // 3. Ambil _id user dari dokumen user yang ditemukan
     userID := docuser.ID
