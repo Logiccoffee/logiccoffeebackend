@@ -1,7 +1,6 @@
 package controller
 
 import (
-	"encoding/json"
 	"io"
 	"net/http"
 	"strconv"
@@ -257,6 +256,7 @@ func UpdateMenu(respw http.ResponseWriter, req *http.Request) {
 		at.WriteJSON(respw, http.StatusForbidden, respn)
 		return
 	}
+
 	// Ambil ID menu dari URL
 	pathParts := strings.Split(req.URL.Path, "/")
 	menuID := pathParts[len(pathParts)-1] // Ambil bagian terakhir dari URL
@@ -276,85 +276,83 @@ func UpdateMenu(respw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	// Decode body langsung ke map
-	var requestBody map[string]interface{}
-	err = json.NewDecoder(req.Body).Decode(&requestBody)
+	// Menyiapkan FormData
+	err = req.ParseMultipartForm(10 << 20) // 10 MB max size for file uploads
 	if err != nil {
 		var respn model.Response
-		respn.Status = "Error: Gagal membaca data JSON"
+		respn.Status = "Error: Gagal memparsing FormData"
 		respn.Response = err.Error()
 		at.WriteJSON(respw, http.StatusBadRequest, respn)
 		return
 	}
 
-	// Periksa apakah body request kosong
-	if len(requestBody) == 0 {
+	// Ambil data dari FormData
+	name := req.FormValue("name")
+	description := req.FormValue("description")
+	price := req.FormValue("price")
+	status := req.FormValue("status")
+	categoryID := req.FormValue("category_id")
+
+	// Validasi dan siapkan data untuk update
+	updateData := bson.M{}
+
+	// Validasi dan setting nama
+	if len(name) > 100 {
 		var respn model.Response
-		respn.Status = "Error: Tidak ada data untuk diperbarui"
+		respn.Status = "Error: Nama tidak boleh lebih dari 100 karakter."
 		at.WriteJSON(respw, http.StatusBadRequest, respn)
 		return
 	}
+	updateData["name"] = name
 
-	// Menyiapkan data untuk update (langsung menggantikan field yang diberikan)
-	updateData := bson.M{}
-	// ganti nama
-	if name, exists := requestBody["name"]; exists && name != "" {
-		if len(name.(string)) > 100 {
-			var respn model.Response
-			respn.Status = "Error: Nama tidak boleh lebih dari 100 karakter."
-			at.WriteJSON(respw, http.StatusBadRequest, respn)
-			return
-		}
-		updateData["name"] = name
-	}
-	if description, exists := requestBody["description"]; exists && description != "" {
+	// Setting description
+	if description != "" {
 		updateData["description"] = description
 	}
-	// ganti harga mesti angka
-	if price, exists := requestBody["price"]; exists {
-		if _, ok := price.(float64); !ok {
+
+	// Validasi dan setting harga
+	if price != "" {
+		priceFloat, err := strconv.ParseFloat(price, 64)
+		if err != nil {
 			var respn model.Response
 			respn.Status = "Error: Harga harus berupa angka"
 			at.WriteJSON(respw, http.StatusBadRequest, respn)
 			return
 		}
-		updateData["price"] = price
+		updateData["price"] = priceFloat
 	}
-	// ganti status menu mesti kek gini
-	if status, exists := requestBody["status"]; exists && status != "" {
-		validStatuses := map[string]bool{
-			"tersedia":       true,
-			"tidak tersedia": true,
-			"habis":          true,
-		}
-		if _, valid := validStatuses[status.(string)]; !valid {
-			var respn model.Response
-			respn.Status = "Error: Status tidak valid. Hanya 'tersedia', 'tidak tersedia', atau 'habis' yang diperbolehkan."
-			at.WriteJSON(respw, http.StatusBadRequest, respn)
-			return
-		}
-		updateData["status"] = status
+
+	// Setting status
+	validStatuses := map[string]bool{
+		"tersedia":       true,
+		"tidak tersedia": true,
+		"habis":          true,
 	}
-	// category id pokoknya gitu
-	if categoryID, exists := requestBody["category_id"]; exists && categoryID != "" {
-		catObjectID, err := primitive.ObjectIDFromHex(categoryID.(string))
-		if err != nil {
-			var respn model.Response
-			respn.Status = "Error: ID Category tidak valid"
-			respn.Response = err.Error()
-			at.WriteJSON(respw, http.StatusBadRequest, respn)
-			return
-		}
-		updateData["category_id"] = catObjectID
+	if !validStatuses[status] {
+		var respn model.Response
+		respn.Status = "Error: Status tidak valid. Hanya 'tersedia', 'tidak tersedia', atau 'habis' yang diperbolehkan."
+		at.WriteJSON(respw, http.StatusBadRequest, respn)
+		return
 	}
+	updateData["status"] = status
+
+	// Setting category ID
+	catObjectID, err := primitive.ObjectIDFromHex(categoryID)
+	if err != nil {
+		var respn model.Response
+		respn.Status = "Error: ID Category tidak valid"
+		respn.Response = err.Error()
+		at.WriteJSON(respw, http.StatusBadRequest, respn)
+		return
+	}
+	updateData["category_id"] = catObjectID
+
 	// Handle file upload if "menuImage" is provided in request
-	// ini buat handle file upload ke menuImage gitu pokoknya
-	menuImage, header, err := req.FormFile("menuImage")
-	if err == nil {
-		defer menuImage.Close()
+	if file, header, err := req.FormFile("menuImage"); err == nil {
+		defer file.Close()
 
 		// Baca konten file terlebih dahulu
-		fileContent, err := io.ReadAll(menuImage)
+		fileContent, err := io.ReadAll(file)
 		if err != nil {
 			var respn model.Response
 			respn.Status = "Error: Gagal Membaca File Gambar"
@@ -404,6 +402,7 @@ func UpdateMenu(respw http.ResponseWriter, req *http.Request) {
 		// Simpan URL gambar ke data update
 		updateData["image"] = *content.Content.HTMLURL
 	}
+
 	// Jika tidak ada perubahan data, beri respon error
 	if len(updateData) == 0 {
 		var respn model.Response
@@ -442,7 +441,6 @@ func UpdateMenu(respw http.ResponseWriter, req *http.Request) {
 	}
 	at.WriteJSON(respw, http.StatusOK, response)
 }
-
 
 func DeleteMenu(respw http.ResponseWriter, req *http.Request) {
 	// Ambil token dari header
