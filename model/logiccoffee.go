@@ -31,9 +31,9 @@ type Menu struct {
 // Order struct untuk menyimpan informasi pesanan
 type Order struct {
 	ID            primitive.ObjectID `json:"id,omitempty" bson:"_id,omitempty"`                        // ID unik pesanan
-	OrderNumber   string             `bson:"orderNumber"`                                              // Unique order number
-	QueueNumber   int                `bson:"queueNumber"`                                              // Nomor antrian
-	OrderDate     time.Time          `bson:"orderDate"`                                                // Tanggal dan waktu pesanan
+	OrderNumber   string             `json:"orderNumber" bson:"orderNumber"`                                              // Unique order number
+	QueueNumber   int                `json:"queueNumber" bson:"queueNumber"`                                              // Nomor antrian
+	OrderDate     time.Time          `json:"orderDate" bson:"orderDate"`                                                // Tanggal dan waktu pesanan
 	UserID        primitive.ObjectID `json:"user_id,omitempty" bson:"user_id,omitempty"`               // ID pengguna yang memesan (jika dari web)
 	UserInfo      UserInfo           `json:"user_info,omitempty" bson:"user_info,omitempty"`           // Informasi user (jika dari web)
 	Orders        []OrderItem        `json:"orders,omitempty" bson:"orders,omitempty"`                 // Daftar item pesanan
